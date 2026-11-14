@@ -12,6 +12,8 @@ namespace GraphiteCompanion
     // Theme (dark / light / system), accent colour and small UI animations.
     public partial class MainWindow
     {
+        private bool refreshingThemeChoices;
+        private Controls.BackgroundColorSettings? backgroundColors;
         private void InitAppearance()
         {
             if (settings.NavigationLayoutVersion < 1)
@@ -36,6 +38,8 @@ namespace GraphiteCompanion
             ThemeDark.IsChecked = settings.Theme == "Dark";
             ThemeLight.IsChecked = settings.Theme == "Light";
             ThemeSystem.IsChecked = settings.Theme == "System";
+            BackgroundColorHost.Content = backgroundColors = new Controls.BackgroundColorSettings(() => settings.BackgroundColor, value => { settings.BackgroundColor = value; ApplyTheme(); });
+            RefreshThemeChoices();
             RefreshCustomAccent();
             var accent = ThemeManager.Current;
             tray.SetAccent(accent.A, accent.B);
@@ -90,8 +94,9 @@ namespace GraphiteCompanion
 
         private void Theme_Checked(object sender, RoutedEventArgs e)
         {
-            if (!initialized) return;
+            if (!initialized || refreshingThemeChoices) return;
             settings.Theme = (string)((FrameworkElement)sender).Tag;
+            settings.BackgroundColor = null;
             ApplyTheme();
         }
 
@@ -107,8 +112,10 @@ namespace GraphiteCompanion
                 for (int i = 0; i < scrollers.Length; i++) scrollers[i].ScrollToVerticalOffset(offsets[i]);
             }
 
-            ThemeManager.Apply(settings.Theme, settings.Accent);
+            ThemeManager.Apply(settings.Theme, settings.Accent, settings.BackgroundColor);
             RefreshCustomAccent();
+            RefreshThemeChoices();
+            backgroundColors?.Refresh();
             var accent = ThemeManager.Current;
             tray.SetAccent(accent.A, accent.B);
             Icon = tray.CreateWindowIcon();
@@ -144,6 +151,19 @@ namespace GraphiteCompanion
             CustomAccentHint.Text = ThemeManager.TryCustomColor(settings.Accent, out _)
                 ? "Используется ваш цвет. Он сохранится после перезапуска."
                 : "Выберите цвет в палитре или введите код #RRGGBB.";
+        }
+
+        private void RefreshThemeChoices()
+        {
+            refreshingThemeChoices = true;
+            try
+            {
+                bool standard = !ThemeManager.TryCustomColor(settings.BackgroundColor, out _);
+                ThemeDark.IsChecked = standard && settings.Theme == "Dark";
+                ThemeLight.IsChecked = standard && settings.Theme == "Light";
+                ThemeSystem.IsChecked = standard && settings.Theme == "System";
+            }
+            finally { refreshingThemeChoices = false; }
         }
 
         private void SetCustomAccent(string value)

@@ -42,6 +42,7 @@ public sealed partial class OverlayWindow
     private void RefreshCustomOptions()
     {
         syncingOptions = true; noteInput.Text = layout.Note;
+        musicPlacementEditor?.Reset(layout.MusicButtons);
         imageName.Text = string.IsNullOrEmpty(layout.ImagePath) ? "Картинка не выбрана" : Path.GetFileName(layout.ImagePath);
         syncingOptions = false;
     }
@@ -64,6 +65,12 @@ public sealed partial class OverlayWindow
         Range("Прозрачность", (1-layout.Opacity)*100, 0, 65, 1, "%", v => layout.Opacity = 1-v/100);
         Range("Масштаб", layout.Scale*100, 80, 125, 5, "%", v => layout.Scale = v/100);
         Range("Ширина", layout.Width, 820, 1200, 20, " px", v => layout.Width = v);
+        panel.Children.Add(SnapBoard.Text("Общий фон оверлея"));
+        var palette=new WrapPanel{Margin=new Thickness(0,8,0,8)};
+        var colorInput=new TextBox{Text=layout.BackgroundColor,MaxLength=7,Margin=new Thickness(0,0,0,8),ToolTip="Цвет #RRGGBB; пусто — цвет темы"};AutomationProperties.SetName(colorInput,"Цвет общего фона оверлея");
+        foreach(string color in new[]{"#141A26","#080C12","#17332D","#2E2240","#33241E","#F1F4F8"}){var swatch=new Button{Width=27,Height=27,Margin=new Thickness(0,0,6,4),ToolTip=color,Background=new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color))};AutomationProperties.SetName(swatch,"Фон "+color);swatch.Click+=(_,_)=>colorInput.Text=color;palette.Children.Add(swatch);}panel.Children.Add(palette);panel.Children.Add(colorInput);
+        colorInput.TextChanged+=(_,_)=>{bool valid=colorInput.Text.Length==0||System.Text.RegularExpressions.Regex.IsMatch(colorInput.Text,"^#[0-9A-Fa-f]{6}$");if(!valid){colorInput.BorderBrush=System.Windows.Media.Brushes.OrangeRed;return;}colorInput.ClearValue(BorderBrushProperty);layout.BackgroundColor=colorInput.Text;ApplyAppearance();};
+        panel.Children.Add(SnapBoard.Button("Фон из темы",()=>colorInput.Text=""));
         var checks = new StackPanel();
         void Check(string title, bool value, Action<bool> change) {
             var check = new CheckBox { Content = title, IsChecked = value, Margin = new Thickness(0, 0, 16, 6) }; check.SetResourceReference(StyleProperty, "Switch");

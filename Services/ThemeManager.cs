@@ -58,9 +58,10 @@ namespace GraphiteCompanion.Services
         }
 
         /// <param name="theme">"Dark", "Light" or "System".</param>
-        public static void Apply(string theme, string accentKey)
+        public static void Apply(string theme, string accentKey, string? backgroundColor = null)
         {
-            bool light = theme == "Light" || (theme == "System" && SystemUsesLight());
+            bool customBackground = TryCustomColor(backgroundColor, out var background);
+            bool light = customBackground ? Luminance(background) > .179 : theme == "Light" || (theme == "System" && SystemUsesLight());
             IsLight = light;
             var accent = FindAccent(accentKey);
             Current = accent;
@@ -91,11 +92,31 @@ namespace GraphiteCompanion.Services
                 r["SelectedBrush"] = Freeze(new SolidColorBrush(Mix(Hex("#141A26"), accent.Solid, 0.16)));
             }
 
+            if(customBackground)
+            {
+                void Paint(string key,Color color)=>r[key]=Freeze(new SolidColorBrush(color));
+                Color foreground=light?Colors.Black:Colors.White;
+                Color card=Mix(background,light?Colors.White:Colors.Black,light ? .92 : .62);
+                Color inset=Mix(background,light?Colors.White:Colors.Black,light ? .84 : .74);
+                Color sub=Mix(foreground,background,.25);
+                if(Contrast(sub,background)<4.5)sub=foreground;
+                Paint("BgBrush",background);Paint("CardBrush",card);Paint("InsetBrush",inset);
+                Paint("CardHoverBrush",Mix(background,light?Colors.White:Colors.Black,light ? .85 : .52));
+                Paint("CardBorderBrush",Mix(background,light?Colors.Black:Colors.White,.18));
+                Paint("GhostBrush",inset);Paint("GhostHoverBrush",Mix(background,light?Colors.White:Colors.Black,light ? .72 : .46));
+                Paint("GhostPressedBrush",Mix(background,light?Colors.White:Colors.Black,light ? .62 : .36));
+                Paint("TrackBrush",Mix(card,foreground,.18));Paint("SwitchOffBrush",Mix(card,foreground,.24));
+                Paint("TextBrush",foreground);Paint("SubTextBrush",sub);
+                Paint("PopupBrush",WithAlpha(card,0xF7));
+                Paint("SelectedBrush",Mix(card,accent.Solid,light ? .12 : .16));
+            }
+
             bool custom = TryCustomColor(accentKey, out _);
             Color readable = accent.Solid;
             if (custom && (light ? Luminance(readable) > .4 : Luminance(readable) < .15))
                 readable = Mix(readable, light ? Colors.Black : Colors.White, .55);
             r["AccentBrush"] = Freeze(new SolidColorBrush(readable));
+            r["AccentSolidTextBrush"] = Freeze(new SolidColorBrush(Luminance(readable) > .179 ? Colors.Black : Colors.White));
             r["AccentTextBrush"] = Freeze(new SolidColorBrush(custom && Luminance(accent.Solid) > .179 ? Colors.Black : Colors.White));
             r["AccentBorderBrush"] = Freeze(new SolidColorBrush(WithAlpha(accent.Solid, 0x60)));
             r["AccentGradient"] = Freeze(new LinearGradientBrush(accent.A, accent.B, new Point(0, 0), new Point(1, 1)));
@@ -106,6 +127,7 @@ namespace GraphiteCompanion.Services
         }
 
         private static T Freeze<T>(T f) where T : Freezable { f.Freeze(); return f; }
+        public static double Contrast(Color a,Color b) => (Math.Max(Luminance(a),Luminance(b))+.05)/(Math.Min(Luminance(a),Luminance(b))+.05);
 
         public static Color Hex(string hex) => (Color)ColorConverter.ConvertFromString(hex);
 
@@ -115,3 +137,5 @@ namespace GraphiteCompanion.Services
             (byte)(a.R + (b.R - a.R) * t), (byte)(a.G + (b.G - a.G) * t), (byte)(a.B + (b.B - a.B) * t));
     }
 }
+
+

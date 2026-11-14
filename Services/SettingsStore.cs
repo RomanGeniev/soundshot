@@ -81,11 +81,19 @@ namespace GraphiteCompanion.Services
         public string? RecordMicrophoneName { get; set; }
 
         public string Theme { get; set; } = "Dark";
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? BackgroundColor { get; set; }
         public string Accent { get; set; } = "Violet";
         public string CustomAccent { get; set; } = "#22D3EE";
         public bool PushToTalk { get; set; }
         public AutoClickerSettings? AutoClicker { get; set; } = new();
         public OverlayLayout? Overlay { get; set; } = new();
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public MonitoringSettings? Monitoring { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public GameWalletState? GameWallet { get; set; }
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public Dictionary<string, GameOverlayPlacement>? GameOverlays { get; set; }
         public Dictionary<string, CanvasLayout>? CanvasLayouts { get; set; } = new();
         public Dictionary<string, List<GraphiteCompanion.Controls.ViewBlockSetting>>? ViewBlocks { get; set; } = new();
         public bool CheckUpdates { get; set; } = true;
@@ -126,16 +134,20 @@ namespace GraphiteCompanion.Services
             return new AppSettings();
         }
 
-        public static void Save(AppSettings settings)
+        public static void Save(AppSettings settings) => TrySave(settings,out _);
+        public static bool TrySave(AppSettings settings,out string? error) => TrySaveTo(FilePath,settings,out error);
+        internal static bool TrySaveTo(string path,AppSettings settings,out string? error)
         {
+            string tmp=path+"."+Guid.NewGuid().ToString("N")+".tmp";
             try
             {
-                Directory.CreateDirectory(Folder);
-                string tmp = FilePath + ".tmp";
+                Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
                 File.WriteAllText(tmp, JsonSerializer.Serialize(settings, Options));
-                File.Move(tmp, FilePath, true);
+                File.Move(tmp, path, true);
+                error=null;return true;
             }
-            catch { /* not critical */ }
+            catch(Exception ex) {error="Не удалось сохранить настройки: "+ex.Message;return false;}
+            finally {try{if(File.Exists(tmp))File.Delete(tmp);}catch{}}
         }
 
         public static void LogError(Exception ex)

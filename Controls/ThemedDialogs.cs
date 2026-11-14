@@ -74,7 +74,7 @@ public sealed class AccentColorWindow : ThemedDialog
     private bool updating;
     public string SelectedHex { get; private set; } = "#000000";
 
-    public AccentColorWindow(Window? owner, Color current) : base(owner, "Свой цвет оформления", 456)
+    public AccentColorWindow(Window? owner, Color current, string title = "Свой цвет оформления") : base(owner, title, 456)
     {
         square.Children.Add(new Rectangle { Fill = new LinearGradientBrush(Colors.White, Color.FromArgb(0, 255, 255, 255), 0) });
         square.Children.Add(new Rectangle { Fill = new LinearGradientBrush(Color.FromArgb(0, 0, 0, 0), Colors.Black, 90) });

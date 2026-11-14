@@ -23,6 +23,7 @@ public sealed partial class OverlayWindow
     private readonly Image customImage = new() { MaxHeight = 240, Stretch = Stretch.Uniform };
     private readonly TextBlock imageError = new() { Text = "Выберите блок, затем нажмите «Картинка»", TextWrapping = TextWrapping.Wrap };
     private string? loadedImage;
+    private MusicPlacementEditor? musicPlacementEditor;
     private CanvasLayout Composition() => layout.Composition?.Copy() ?? new() { Blocks = layout.Blocks.Select(b => new CanvasBlock { Id = b.Id, Zone = b.Zone, Visible = b.Visible }).ToList() };
     private void RememberComposition()
     {
@@ -54,6 +55,7 @@ public sealed partial class OverlayWindow
         blocks["image"] = Group("МОЯ КАРТИНКА", imageSurface);
         var cards = OverlayLayout.Catalog.Select(c => new CanvasCard(c.Id, c.Name, blocks[c.Id], c.Zone, c.Visible)).ToDictionary(c => c.Id);
         cards["music"].Inside.Add(nowPlaying.LayoutButtons);
+        cards["music"].Options=musicPlacementEditor=new MusicPlacementEditor(layout.MusicButtons,value=>{if(!IsLayoutEditing)return;layout.MusicButtons=value;nowPlaying.PlaceButtons(value);});
         cards["sound"].Inside.Add(new("Overlay.modes", "Режимы", (Panel)modeBox.Child, "Игры", "Музыка", "Фильмы"));
         cards["sound"].Inside.Add(new("Overlay.eq", "Эквалайзер", eqRow, "Включить эквалайзер", "Сравнить"));
         // Volume and its numeric readout stay one indivisible element.
@@ -87,6 +89,9 @@ public sealed partial class OverlayWindow
     }
     private void ApplyAppearance()
     {
+        if(layout.BackgroundColor.Length>0)Background=new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(layout.BackgroundColor));
+        else SetResourceReference(BackgroundProperty,"CardBrush");
+        nowPlaying.PlaceButtons(layout.MusicButtons);
         footer.Visibility = layout.Footer ? Visibility.Visible : Visibility.Collapsed;
         noteText.Text = string.IsNullOrWhiteSpace(layout.Note) ? "Ваша заметка — выберите этот блок и нажмите «Текст заметки»" : layout.Note;
         if (loadedImage != layout.ImagePath)

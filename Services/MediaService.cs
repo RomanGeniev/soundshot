@@ -20,6 +20,7 @@ namespace GraphiteCompanion.Services
         public string Title { get; init; } = "";
         public string Artist { get; init; } = "";
         public string App { get; init; } = "";
+        public string SourceAppId {get;init;}="";
         public ImageSource? Cover { get; init; }
         public TimeSpan Position { get; init; }
         public TimeSpan Duration { get; init; }
@@ -28,7 +29,7 @@ namespace GraphiteCompanion.Services
         public bool CanNext { get; init; }
         public bool CanSeek { get; init; }
         /// <summary>Changes when the track changes (used to reload the cover only then).</summary>
-        public string Key => App + "\n" + Title + "\n" + Artist;
+        public string Key => SourceAppId+"\n"+App + "\n" + Title + "\n" + Artist;
     }
 
     /// <summary>
@@ -136,6 +137,7 @@ namespace GraphiteCompanion.Services
                     Title = props?.Title ?? "",
                     Artist = !string.IsNullOrWhiteSpace(props?.Artist) ? props!.Artist : props?.AlbumArtist ?? "",
                     App = AppName(s.SourceAppUserModelId),
+                    SourceAppId=s.SourceAppUserModelId,
                     Position = position,
                     Duration = duration,
                     Playing = playing,
@@ -148,7 +150,7 @@ namespace GraphiteCompanion.Services
                 EnsureCover(imageKey, props?.Thumbnail);
                 latest = new NowPlaying
                 {
-                    Title = np.Title, Artist = np.Artist, App = np.App, Position = np.Position, Duration = np.Duration,
+                    Title = np.Title, Artist = np.Artist, App = np.App, SourceAppId=np.SourceAppId, Position = np.Position, Duration = np.Duration,
                     Playing = np.Playing, CanPrevious = np.CanPrevious, CanNext = np.CanNext, CanSeek = np.CanSeek, Cover = cover,
                 };
                 LatestAt = DateTime.UtcNow;

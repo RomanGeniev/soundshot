@@ -57,11 +57,12 @@ public partial class MainWindow
     {
         foreach (var pair in layoutBoards) if (pair.Key != layoutPage && pair.Value.Editing) pair.Value.Finish(false);
         if (CustomizeViewButton == null) return;
-        CustomizeViewButton.Visibility = layoutBoards.ContainsKey(layoutPage) ? Visibility.Visible : Visibility.Collapsed;
+        CustomizeViewButton.Visibility = layoutPage=="Monitoring"||layoutBoards.ContainsKey(layoutPage) ? Visibility.Visible : Visibility.Collapsed;
         CustomizeViewButton.Content = layoutBoards.TryGetValue(layoutPage, out var board) && board.Editing ? "Редактирование вида" : "Изменить вид";
     }
     private void CustomizeView_Click(object sender, RoutedEventArgs e)
     {
+        if(layoutPage=="Monitoring"){EditMonitoring();return;}
         if (layoutBoards.TryGetValue(layoutPage, out var board)) board.Begin();
     }
 }

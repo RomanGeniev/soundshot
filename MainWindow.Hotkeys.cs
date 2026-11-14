@@ -60,6 +60,8 @@ namespace GraphiteCompanion
                         Defaults = new[] { (A, 0x77u), (CA, 0x77u) }, Run = () => _ = TakeScreenshot() },
                 new() { Id = "overlay", Group = "Панель", Label = "Открыть панель быстрых настроек",
                         Defaults = new[] { (CA, 0x47u), (CSA, 0x47u) }, Run = ToggleOverlay },
+                new() { Id = "monitoring.overlay", Group = "Мониторинг", Label = "Показать / скрыть метрики на экране",
+                        Defaults = new[] { (CA, 0x4Fu) }, Run = ToggleMetricsOverlay },
                 new() { Id = "media.play", Group = "Музыка", Label = "Пауза / продолжить",
                         Defaults = new[] { (CA, 0x20u), (CSA, 0x20u), (CA, 0x26u) }, Run = () => _ = MediaCommand(MediaService.PlayPause, playPause: true) },
                 new() { Id = "media.next", Group = "Музыка", Label = "Следующий трек",

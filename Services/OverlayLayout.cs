@@ -15,6 +15,8 @@ public sealed class OverlayLayout
 {
     public CanvasLayout? Composition { get; set; }
     public double Opacity { get; set; } = 1;
+    public string BackgroundColor { get; set; } = "";
+    public Dictionary<string,CanvasPosition> MusicButtons {get;set;}=new();
     public double Scale { get; set; } = 1;
     public double Width { get; set; } = 960;
     public bool Footer { get; set; } = true;
@@ -36,12 +38,15 @@ public sealed class OverlayLayout
     public OverlayLayout Copy() => new()
     {
         Composition = Composition?.Copy(), Opacity = Opacity, Scale = Scale, Width = Width, Footer = Footer, RememberPosition = RememberPosition,
-        X = X, Y = Y, Note = Note, ImagePath = ImagePath,
+        X = X, Y = Y, Note = Note, ImagePath = ImagePath, BackgroundColor=BackgroundColor,
+        MusicButtons=(MusicButtons??new()).Where(p=>p.Value!=null).ToDictionary(p=>p.Key,p=>p.Value.Copy()),
         Blocks = (Blocks ?? new()).Where(x => x != null).Select(x => new OverlayBlock { Id = x.Id, Zone = x.Zone, Visible = x.Visible }).ToList()
     };
     public OverlayLayout Normalize()
     {
         Opacity = double.IsFinite(Opacity) ? Math.Clamp(Opacity, .35, 1) : 1;
+        BackgroundColor=MonitorProfile.Color(BackgroundColor,"");
+        MusicButtons=(MusicButtons??new()).Where(p=>p.Key is "previous" or "play" or "next"&&p.Value!=null).ToDictionary(p=>p.Key,p=>new CanvasPosition{X=MonitorProfile.Clamp(p.Value.X,0,1,1),Y=MonitorProfile.Clamp(p.Value.Y,0,1,.5)});
         Scale = double.IsFinite(Scale) ? Math.Clamp(Scale, .8, 1.25) : 1;
         Width = double.IsFinite(Width) ? Math.Clamp(Width, 820, 1200) : 960;
         X = X is double x && double.IsFinite(x) ? Math.Clamp(x, 0, 1) : null;

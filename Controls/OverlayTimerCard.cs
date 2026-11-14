@@ -37,6 +37,9 @@ namespace GraphiteCompanion.Controls
         public OverlayTimerCard(OverlayTimer timer)
         {
             this.timer = timer;
+            // Reserve the sign and three minute digits before editable wrappers capture
+            // their natural sizes. Crossing zero must not change the row's geometry.
+            minutes.Width=72;
             Width = 310;
             HorizontalAlignment = HorizontalAlignment.Right;
             CornerRadius = new CornerRadius(10);
@@ -113,20 +116,22 @@ namespace GraphiteCompanion.Controls
 
         private void Refresh()
         {
-            bool editable = timer.State is OverlayTimerState.Ready or OverlayTimerState.Finished;
-            int value = (int)Math.Ceiling(timer.Remaining.TotalSeconds);
-            minutes.Text = $"{value / 60:00}";
+            bool editable = timer.State == OverlayTimerState.Ready;
+            bool overdue=timer.Remaining<TimeSpan.Zero;
+            int value = (int)Math.Ceiling(Math.Abs(timer.Remaining.TotalSeconds));
+            minutes.Text = (overdue?"−":"")+$"{value / 60:00}";
+            minutes.FontSize=minutes.Text.Length<=4?24:Math.Max(12,96d/minutes.Text.Length);
             seconds.Text = $"{value % 60:00}";
             status.Text = timer.State switch
             {
                 OverlayTimerState.Running => "Идёт отсчёт",
-                OverlayTimerState.Paused => "На паузе",
-                OverlayTimerState.Finished => "Время вышло",
+                OverlayTimerState.Paused => overdue?"Просрочка · пауза":"На паузе",
+                OverlayTimerState.Finished => "Время вышло · просрочка",
                 _ => "",
             };
             status.SetResourceReference(TextBlock.ForegroundProperty, "AccentBrush");
-            bool running = timer.State == OverlayTimerState.Running;
-            string action = timer.State switch { OverlayTimerState.Running => "Пауза", OverlayTimerState.Paused => "Продолжить", OverlayTimerState.Finished => "Повторить", _ => "Запустить" };
+            bool running = timer.State is OverlayTimerState.Running or OverlayTimerState.Finished;
+            string action = timer.State switch { OverlayTimerState.Running or OverlayTimerState.Finished => "Пауза", OverlayTimerState.Paused => "Продолжить", _ => "Запустить" };
             start.Content = Icon(running ? "\uE769" : "\uE768", 15);
             HelpTips.Set(start, action);
             AutomationProperties.SetName(start, action + " таймер");

@@ -1,0 +1,39 @@
+SoundShot monitoring components
+
+LibreHardwareMonitorLib 0.9.6 — Mozilla Public License 2.0.
+Copyright LibreHardwareMonitor contributors. Unmodified upstream library.
+Source: https://github.com/LibreHardwareMonitor/LibreHardwareMonitor/tree/3d331e3370efb858411f19511373eff65a218701
+License text: LibreHardwareMonitor.txt.
+
+DiskInfoToolkit 1.1.2 — Mozilla Public License 2.0.
+Copyright Florian K. Unmodified upstream library.
+Source: https://github.com/Blacktempel/DiskInfoToolkit/tree/25319eae5781e75bcf141e844ceab2afe94d40ea
+
+RAMSPDToolkit-NDD 1.4.2 — Mozilla Public License 2.0.
+Copyright Florian K. Unmodified upstream library.
+Source: https://github.com/Blacktempel/RAMSPDToolkit/tree/3b47b960e0830fef344624ad5e389675d5f0a1ce
+
+BlackSharp.Core 1.0.7 — Mozilla Public License 2.0.
+Copyright Florian K. Unmodified upstream library.
+Source: https://github.com/Blacktempel/BlackSharp/tree/c70b735c6cec123ee8a046ac4a0bc6c606f52cf0
+
+The MPL 2.0 text in LibreHardwareMonitor.txt also applies to the three libraries above.
+The corresponding source is available at the listed URLs, without charge.
+
+HidSharp 2.6.4 — Apache License 2.0 (HidSharp.txt).
+Copyright 2010–2025 James F. Bellinger.
+Project: https://software.seekye.com/hidsharp
+
+PresentMon 2.3.1 x64 — MIT (PresentMon.txt).
+Copyright Intel Corporation.
+Source: https://github.com/GameTechDev/PresentMon/tree/v2.3.1
+Embedded official signed executable SHA-256:
+364e5d98d4d134bd54dd25c22ed2ca2f4883f8bc3ed6502bee0c151e3436d30c
+
+Microsoft .NET runtime and System.* libraries — MIT (DotNet.txt),
+additional component notices: DotNet-ThirdParty.txt.
+Source: https://github.com/dotnet/runtime
+Mono.Posix.NETStandard 1.0.0 — see Mono.txt.
+Source: https://github.com/mono/mono
+
+RTSS is not bundled. RivaTuner Statistics Server is a separate application.

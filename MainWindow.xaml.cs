@@ -68,7 +68,7 @@ namespace GraphiteCompanion
 
             bool firstRun = !SettingsStore.Exists;
             settings = SettingsStore.Load();
-            ThemeManager.Apply(settings.Theme, settings.Accent);
+            ThemeManager.Apply(settings.Theme, settings.Accent, settings.BackgroundColor);
 
             applyTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(35) };
             applyTimer.Tick += (_, _) => { applyTimer.Stop(); ApplyToDevice(); };
@@ -108,6 +108,7 @@ namespace GraphiteCompanion
             LoadPresetToUi();
             InitFeatures();
             InitAutoClicker();
+            InitMonitoring();
             RefreshPushToTalk();
             InitViewLayout();
             HelpTips.Prepare(this);
@@ -509,11 +510,13 @@ namespace GraphiteCompanion
             }
             PageGallery.Visibility = tab == "Gallery" ? Visibility.Visible : Visibility.Collapsed;
             PageAutoClicker.Visibility = tab == "AutoClicker" ? Visibility.Visible : Visibility.Collapsed;
+            PageMonitoring.Visibility = tab == "Monitoring" ? Visibility.Visible : Visibility.Collapsed;
             OutputStrip.Visibility = tab is "Eq" or "Effects" ? Visibility.Visible : Visibility.Collapsed;
             (PageTitle.Text, PageDescription.Text) = tab switch
             {
                 "Gallery" => ("Галерея", "Последние записи, повторы и скриншоты."),
                 "AutoClicker" => ("Автокликер", "Настройте клики. Запускайте и останавливайте одной клавишей."),
+                "Monitoring" => ("Мониторинг", "Показатели компьютера и настраиваемая панель поверх экрана."),
                 "Mic" => ("Микрофон", "Выберите микрофон, проверьте уровень и послушайте результат."),
                 "Record" => ("Запись экрана", "Видео, мгновенные повторы и скриншоты."),
                 "Effects" => ("Эффекты", "Включайте нужные эффекты и сравнивайте результат на слух."),
@@ -528,9 +531,10 @@ namespace GraphiteCompanion
             }
             if (tab == "Record") UpdateRecStatus();
             if (initialized)
-                AnimatePage(tab switch { "Eq" => PageEq, "Effects" => PageEffects, "Mic" => PageMic, "Record" => PageRecord, "Settings" => PageSettings, "AutoClicker" => PageAutoClicker, "Gallery" => PageGallery, _ => PageEq });
+                AnimatePage(tab switch { "Eq" => PageEq, "Effects" => PageEffects, "Mic" => PageMic, "Record" => PageRecord, "Settings" => PageSettings, "AutoClicker" => PageAutoClicker, "Gallery" => PageGallery,"Monitoring"=>PageMonitoring, _ => PageEq });
             if (tab == "Eq") Dispatcher.BeginInvoke(new Action(DrawCurve), DispatcherPriority.Loaded);
             UpdateMeters();
+            RefreshMonitoringLifetime();
         }
 
         // ===================== Presets =====================
@@ -954,6 +958,7 @@ namespace GraphiteCompanion
                 if (regionSelection != null) { Dispatcher.BeginInvoke(new Action(() => regionSelection?.Cancel())); return true; }
                 if (IsAutoClickerKeyRecording) return false;
                 if (AutoClickerState.Running) { StopAutoClicker(); return true; }
+                if (GameDialog != null) return false;
                 var current = overlay;
                 if (current is not { IsVisible: true }) return false;
                 if (current.HandleLayoutEscape()) return true;
@@ -1009,6 +1014,7 @@ namespace GraphiteCompanion
             e.Cancel = true;
             if (shutdownStarted) return;
             shutdownStarted = true;
+            var monitoringShutdown=StopMonitoring();
             galleryPanel?.Dispose();
             countdownTimer?.Dispose();
             autoClicker?.Dispose();
@@ -1043,6 +1049,8 @@ namespace GraphiteCompanion
             }
             catch (Exception ex) { SettingsStore.LogError(ex); }
             try { await recorderShutdown; }
+            catch (Exception ex) { SettingsStore.LogError(ex); }
+            try { await monitoringShutdown; }
             catch (Exception ex) { SettingsStore.LogError(ex); }
             SettingsStore.Save(settings);
             try { CloseSession(); }

@@ -176,6 +176,8 @@ namespace GraphiteCompanion
 
         private OverlayWindow? overlay;
         private OverlayTimer? countdownTimer;
+        private OverlayGamesState? overlayGames;
+        public OverlayGamesState OverlayGames=>overlayGames??=new(new GameWallet(settings.GameWallet,next=>{var previous=settings.GameWallet;settings.GameWallet=next;if(SettingsStore.TrySave(settings,out var error))return null;settings.GameWallet=previous;return error??"Ошибка записи настроек";}));
         public OverlayTimer CountdownTimer
         {
             get
@@ -198,6 +200,7 @@ namespace GraphiteCompanion
         {
             if (regionSelection != null) return;
             if (shutdownStarted) return;
+            if (ActivateGameDialog()) return;
             if (overlay?.ActivateOwnedDialog() == true) return;
             if (overlay is { IsVisible: true }) { overlay.Close(); return; }
             overlay = new OverlayWindow(this);

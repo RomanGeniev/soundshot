@@ -33,11 +33,13 @@ internal sealed class CanvasBoardPanel:Panel
             var pending=new Dictionary<string,Rect>();double bottom=0;
             foreach(var b in blocks.Where(b=>b.Position!=null).Concat(blocks.Where(b=>b.Position==null)))
             {
-                double w=Math.Min(width,b.Size.Width>0?b.Size.Width*Fit:width/2-7);
+                double w=Math.Min(width,b.Size.Width>0?b.Size.Width*Fit:b.Zone==0?width:(width-14)*(b.Zone==1?LeftWeight:RightWeight)/(LeftWeight+RightWeight));
                 var t=elements[b.Id];t.Measure(new Size(w,double.PositiveInfinity));
                 if(!t.HasLayoutContent)continue;
-                var p=b.Position;double px=Math.Clamp((p?.X??0)*Fit,0,Math.Max(0,width-w));
-                double py=p!=null?p.Y*Fit:bottom;
+                var p=b.Position;double px=p!=null?Math.Clamp(p.X*Fit,0,Math.Max(0,width-w)):b.Zone==2?Math.Max(0,width-w):0;
+                // Newly added cards join their column below its visible content. Existing
+                // authored coordinates stay intact, including deliberately empty spaces.
+                double py=p!=null?p.Y*Fit:Resolve(pending,MovingId).Values.Where(r=>px<r.Right-.1&&px+w>r.Left+.1).Select(r=>r.Bottom).DefaultIfEmpty(0).Max();
                 pending[b.Id]=new Rect(px,py,w,t.DesiredSize.Height);bottom=Math.Max(bottom,py+t.DesiredSize.Height);
             }
             var placed=Resolve(pending,MovingId);

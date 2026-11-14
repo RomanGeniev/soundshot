@@ -20,6 +20,8 @@ namespace GraphiteCompanion.Controls
     {
         private readonly MainWindow main;
         private readonly Func<System.Threading.Tasks.Task<NowPlaying?>> readSnapshot;
+        private readonly Func<NowPlaying,CancellationToken,System.Threading.Tasks.Task<PlayerVolume>> readPlayerVolume=NativePlayerVolume.ReadAsync;
+        private readonly Func<NowPlaying,double,CancellationToken,System.Threading.Tasks.Task<PlayerVolume>> writePlayerVolume=NativePlayerVolume.SetAsync;
         private readonly Canvas backdropLayer = new()
         {
             IsHitTestVisible = false, Opacity = 0, CacheMode = new BitmapCache { RenderAtScale = 0.5 },
@@ -32,6 +34,8 @@ namespace GraphiteCompanion.Controls
         private readonly TextBlock titleText = new() { FontSize = 20, FontWeight = FontWeights.SemiBold, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 4, 0, 0) };
         private readonly TextBlock artistText = new() { FontSize = 13, TextTrimming = TextTrimming.CharacterEllipsis, Margin = new Thickness(0, 2, 0, 0) };
         public ViewLayoutGroup LayoutButtons { get; private set; } = null!;
+        private readonly MusicTransportPanel transport=new(){Margin=new Thickness(16,16,60,16)};
+        public void PlaceButtons(System.Collections.Generic.Dictionary<string,CanvasPosition> positions){transport.Positions=positions;transport.InvalidateArrange();}
         private readonly Slider seek = new() { Margin = new Thickness(-4, 10, -4, 0) };
         private readonly TextBlock elapsedText = new() { FontSize = 11 };
         private readonly TextBlock remainText = new() { FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right };
@@ -53,6 +57,19 @@ namespace GraphiteCompanion.Controls
         private CancellationTokenSource? seekRequest;
         private bool panelMoving;
         private bool disposed;
+        private readonly Slider playerVolume=new(){Minimum=0,Maximum=100,Width=130,IsMoveToPointEnabled=true,IsEnabled=false,Focusable=false};
+        private readonly TextBlock playerVolumeValue=new(){Text="—",Width=36,FontSize=11,VerticalAlignment=VerticalAlignment.Center};
+        private readonly Button volumeButton=new(){Width=32,Height=32,Focusable=false,HorizontalAlignment=HorizontalAlignment.Right,VerticalAlignment=VerticalAlignment.Top,Margin=new Thickness(0,40,16,0)};
+        private readonly Popup volumePopup=new(){StaysOpen=true,AllowsTransparency=true,Placement=PlacementMode.Bottom,VerticalOffset=8,HorizontalOffset=-228,PopupAnimation=PopupAnimation.Fade};
+        private readonly TextBlock volumeMessage=new(){FontSize=11,TextWrapping=TextWrapping.Wrap,Margin=new Thickness(0,7,0,0),MaxWidth=232};
+        private Window? volumeOwner;
+        internal IntPtr VolumePopupHandle => volumePopup.IsOpen && System.Windows.PresentationSource.FromVisual(volumePopup.Child) is System.Windows.Interop.HwndSource source ? source.Handle : IntPtr.Zero;
+        internal bool CloseVolumePopup(){bool open=volumePopup.IsOpen;volumePopup.IsOpen=false;return open;}
+        private readonly DispatcherTimer volumeDebounce=new(){Interval=TimeSpan.FromMilliseconds(200)};
+        private DateTime nextVolumeRead;
+        private bool volumeSetting,volumeReading,volumeWriting;
+        private CancellationTokenSource volumeLifetime=new();
+        private NowPlaying? volumeTarget;
 
         private static T R<T>(string key) => (T)Application.Current.FindResource(key);
 
@@ -121,14 +138,12 @@ namespace GraphiteCompanion.Controls
                 ignoreUntil = DateTime.Now.AddMilliseconds(700);
                 await MediaService.PlayPause();
             };
-            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(16, 0, 0, 0) };
-            buttons.Children.Add(prev);
+            transport.Children.Add(prev);
             play.Margin = new Thickness(8, 0, 8, 0);
-            buttons.Children.Add(play);
-            buttons.Children.Add(next);
-
-            var buttonHost = CanvasParts.Wrap(buttons); buttonHost.MaxWidth = 350;
-            LayoutButtons = new ViewLayoutGroup("Overlay.musicButtons", "Кнопки плеера", buttonHost, "Предыдущий трек", "Пауза / пуск", "Следующий трек");
+            transport.Children.Add(play);
+            transport.Children.Add(next);
+            transport.Keys[prev]="previous";transport.Keys[play]="play";transport.Keys[next]="next";
+            LayoutButtons = new ViewLayoutGroup("Overlay.musicButtons", "Кнопки плеера", transport, "Предыдущий трек", "Пауза / пуск", "Следующий трек");
 
             // ---- seek bar
             // Some apps (Apple Music) publish a timeline but ignore the system seek command
@@ -213,15 +228,31 @@ namespace GraphiteCompanion.Controls
             // ---- layout: cover | (texts + buttons) / (seek + times)
             var top = new Grid();
             top.ColumnDefinitions.Add(new ColumnDefinition());
-            top.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            top.Margin=new Thickness(0,0,220,0);
             top.Children.Add(texts);
-            Grid.SetColumn(buttons, 1);
-            top.Children.Add(buttons);
 
             var info = new StackPanel { Margin = new Thickness(20, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             info.Children.Add(top);
             info.Children.Add(seek);
             info.Children.Add(timeRow);
+            Setup(volumeButton,"\uE767",16,"RoundGhostButton");
+            volumeButton.ToolTip="Громкость плеера";
+            System.Windows.Automation.AutomationProperties.SetName(volumeButton,"Громкость плеера");
+            var volumeContent=new StackPanel();
+            var volumeHeading=new DockPanel{Margin=new Thickness(0,0,0,5)};
+            playerVolumeValue.HorizontalAlignment=HorizontalAlignment.Right;playerVolumeValue.TextAlignment=TextAlignment.Right;
+            playerVolumeValue.SetResourceReference(TextBlock.ForegroundProperty,"SubTextBrush");
+            DockPanel.SetDock(playerVolumeValue,Dock.Right);volumeHeading.Children.Add(playerVolumeValue);
+            var volumeCaption=new TextBlock{Text="Громкость плеера",FontSize=12,FontWeight=FontWeights.SemiBold};volumeCaption.SetResourceReference(TextBlock.ForegroundProperty,"TextBrush");volumeHeading.Children.Add(volumeCaption);volumeContent.Children.Add(volumeHeading);
+            playerVolume.Width=232;playerVolume.Height=26;playerVolume.SetResourceReference(StyleProperty,"VolumeSlider");System.Windows.Automation.AutomationProperties.SetName(playerVolume,"Громкость внутри плеера");volumeContent.Children.Add(playerVolume);
+            volumeMessage.SetResourceReference(TextBlock.ForegroundProperty,"SubTextBrush");volumeContent.Children.Add(volumeMessage);
+            var volumeBox=new Border{Width=260,Padding=new Thickness(13,10,13,10),CornerRadius=new CornerRadius(12),BorderThickness=new Thickness(1),Child=volumeContent};volumeBox.SetResourceReference(BackgroundProperty,"CardBrush");volumeBox.SetResourceReference(BorderBrushProperty,"CardBorderBrush");
+            volumePopup.Child=volumeBox;volumePopup.PlacementTarget=volumeButton;
+            volumeButton.Click+=async(_,_)=>{volumePopup.IsOpen=!volumePopup.IsOpen;if(volumePopup.IsOpen){nextVolumeRead=DateTime.MinValue;await ReadVolume();}};
+            volumePopup.Opened+=(_,_)=>System.Windows.Automation.AutomationProperties.SetItemStatus(volumeButton,"Ползунок открыт");
+            volumePopup.Closed+=(_,_)=>System.Windows.Automation.AutomationProperties.SetItemStatus(volumeButton,"Ползунок скрыт");
+            playerVolume.ValueChanged+=(_,_)=>{if(volumeSetting||!playerVolume.IsEnabled)return;volumeTarget=state;playerVolumeValue.Text=$"{playerVolume.Value:0}%";volumeDebounce.Stop();volumeDebounce.Start();};
+            volumeDebounce.Tick+=async(_,_)=>{volumeDebounce.Stop();var target=volumeTarget;if(disposed||target==null||state?.Key!=target.Key)return;volumeWriting=true;try{var result=await writePlayerVolume(target,playerVolume.Value,volumeLifetime.Token);if(!disposed&&state?.Key==target.Key)ShowVolume(result);}finally{volumeWriting=false;nextVolumeRead=DateTime.UtcNow.AddSeconds(1);}};
 
             var body = new Grid { Margin = new Thickness(16) };
             body.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -233,7 +264,7 @@ namespace GraphiteCompanion.Controls
             // blurred cover behind everything, clipped to the rounded card
             // the picture sits on a Canvas so it never makes the card taller: it is sized to the card instead
             backdropLayer.Children.Add(backdrop);
-            var root = new Grid { Children = { backdropLayer, body } };
+            var root = new Grid { Children = { backdropLayer, body, transport, volumeButton, volumePopup } };
             root.SizeChanged += (_, e) =>
             {
                 root.Clip = new RectangleGeometry(new Rect(e.NewSize), 15, 15);
@@ -245,9 +276,9 @@ namespace GraphiteCompanion.Controls
             Child = root;
 
             timer.Tick += async (_, _) => await Tick();
-            Loaded += async (_, _) => { if (IsVisible) { timer.Start(); await Fetch(); } };
-            Unloaded += (_, _) => { timer.Stop(); seekRequest?.Cancel(); };
-            IsVisibleChanged += async (_, _) => { if (IsVisible && IsLoaded && !disposed) { timer.Start(); await Fetch(); } else timer.Stop(); };
+            Loaded += async (_, _) => { volumeOwner=Window.GetWindow(this);if(volumeOwner!=null)volumeOwner.PreviewMouseDown+=OnVolumeOwnerMouseDown;if (IsVisible) { timer.Start(); await Fetch(); } };
+            Unloaded += (_, _) => { CloseVolumePopup();if(volumeOwner!=null)volumeOwner.PreviewMouseDown-=OnVolumeOwnerMouseDown;volumeOwner=null;timer.Stop(); seekRequest?.Cancel(); };
+            IsVisibleChanged += async (_, _) => { if (IsVisible && IsLoaded && !disposed) { timer.Start(); await Fetch(); } else {timer.Stop();CloseVolumePopup();} };
             state = MediaService.Recent;
             stateTime = state == null ? DateTime.Now : MediaService.LatestAt.ToLocalTime();
             Show();
@@ -257,8 +288,13 @@ namespace GraphiteCompanion.Controls
         {
             if (disposed) return;
             panelMoving = moving;
-            if (moving) timer.Stop();
+            if (moving) {timer.Stop();CloseVolumePopup();}
             else if (IsLoaded && IsVisible) timer.Start();
+        }
+
+        private void OnVolumeOwnerMouseDown(object sender,MouseButtonEventArgs e)
+        {
+            if(volumePopup.IsOpen&&!volumeButton.IsMouseOver&&!volumePopup.Child.IsMouseOver)CloseVolumePopup();
         }
 
         private TextBlock Setup(Button b, string glyph, double size, string style)
@@ -307,7 +343,7 @@ namespace GraphiteCompanion.Controls
                 if (s != null) emptyReads = 0;
                 firstRead = false;
                 if ((dragging || seekRequest != null || DateTime.Now < ignoreUntil) && s != null && state != null && s.Key == state.Key) return;
-                if (s?.Key != state?.Key) seekRequest?.Cancel();
+                if (s?.Key != state?.Key) {seekRequest?.Cancel();volumeDebounce.Stop();volumeTarget=null;nextVolumeRead=DateTime.MinValue;ShowVolume(new(null,"Проверяем доступ к громкости текущего плеера…"));}
                 if (s == null || state == null || s.Key != state.Key) seekFails = 0;   // new track / app: give seeking a fresh chance
                 if (s != null && state != null && s.Key == state.Key && s.Playing == state.Playing)
                 {
@@ -322,6 +358,7 @@ namespace GraphiteCompanion.Controls
                 stateTime = DateTime.Now;
                 state = s;
                 Show();
+                _=ReadVolume();
             }
             finally { busy = false; }
         }
@@ -395,7 +432,7 @@ namespace GraphiteCompanion.Controls
 
         private static NowPlaying With(NowPlaying s, TimeSpan at, bool playing) => new()
         {
-            Title = s.Title, Artist = s.Artist, App = s.App, Cover = s.Cover, Position = at, Duration = s.Duration,
+            Title = s.Title, Artist = s.Artist, App = s.App, SourceAppId=s.SourceAppId, Cover = s.Cover, Position = at, Duration = s.Duration,
             Playing = playing, CanPrevious = s.CanPrevious, CanNext = s.CanNext, CanSeek = s.CanSeek,
         };
 
@@ -403,7 +440,9 @@ namespace GraphiteCompanion.Controls
         {
             if (disposed) return;
             disposed = true;
+            CloseVolumePopup();if(volumeOwner!=null)volumeOwner.PreviewMouseDown-=OnVolumeOwnerMouseDown;volumeOwner=null;
             timer.Stop();
+            volumeDebounce.Stop();volumeLifetime.Cancel();volumeLifetime.Dispose();
             seekRequest?.Cancel();
             if (seek.IsMouseCaptureWithin) Mouse.Capture(null);
             state = null;
@@ -413,5 +452,12 @@ namespace GraphiteCompanion.Controls
             backdropLayer.BeginAnimation(OpacityProperty, null);
             backdropLayer.CacheMode = null;
         }
+        private async System.Threading.Tasks.Task ReadVolume()
+        {
+            if(!volumePopup.IsOpen||volumeReading||volumeWriting||volumeDebounce.IsEnabled||playerVolume.IsMouseCaptureWithin||DateTime.UtcNow<nextVolumeRead||disposed)return;
+            var target=state;if(target==null){ShowVolume(new(null,"Нет активного плеера"));return;}volumeReading=true;nextVolumeRead=DateTime.UtcNow.AddSeconds(5);
+            try{var value=await readPlayerVolume(target,volumeLifetime.Token);if(!disposed&&state?.Key==target.Key&&!volumeWriting&&!volumeDebounce.IsEnabled&&!playerVolume.IsMouseCaptureWithin)ShowVolume(value);}finally{volumeReading=false;}
+        }
+        private void ShowVolume(PlayerVolume value){volumeSetting=true;playerVolume.IsEnabled=value.Percent.HasValue;if(value.Percent.HasValue)playerVolume.Value=value.Percent.Value;playerVolumeValue.Text=value.Percent.HasValue?$"{value.Percent:0}%":"—";playerVolume.ToolTip=value.Message;playerVolumeValue.ToolTip=value.Message;volumeMessage.Text=value.Message;volumeMessage.Visibility=value.Percent.HasValue?Visibility.Collapsed:Visibility.Visible;((TextBlock)volumeButton.Content).Text=value.Percent==0?"\uE74F":"\uE767";volumeSetting=false;}
     }
 }

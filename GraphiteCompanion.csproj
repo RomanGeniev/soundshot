@@ -7,13 +7,14 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <ImplicitUsings>disable</ImplicitUsings>
     <AssemblyName>SoundShot</AssemblyName>
     <AssemblyTitle>SoundShot</AssemblyTitle>
     <Description>SoundShot</Description>
     <RootNamespace>GraphiteCompanion</RootNamespace>
     <Product>SoundShot</Product>
-    <Version>2.2.43</Version>
+    <Version>2.2.46</Version>
     <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <NoWarn>$(NoWarn);WPF0001</NoWarn>
@@ -23,7 +24,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Assets\Monitoring\PresentMon.exe" LogicalName="SoundShot.PresentMon" />
+    <EmbeddedResource Include="Licenses\*.txt" />
     <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="LibreHardwareMonitorLib" Version="0.9.6" />
   </ItemGroup>
 
 </Project>
+
+
+

@@ -11,6 +11,7 @@
     <SolidColorBrush x:Key="TextBrush" Color="#E8ECF4"/>
     <SolidColorBrush x:Key="SubTextBrush" Color="#8A94A8"/>
     <SolidColorBrush x:Key="AccentTextBrush" Color="White"/>
+    <SolidColorBrush x:Key="AccentSolidTextBrush" Color="Black"/>
     <SolidColorBrush x:Key="AccentBrush" Color="#6E97FF"/>
     <SolidColorBrush x:Key="GoodBrush" Color="#3DDC97"/>
     <SolidColorBrush x:Key="WarnBrush" Color="#F5A524"/>

@@ -13,12 +13,13 @@ namespace GraphiteCompanion.Services
         private TimeSpan remainingAtStart = TimeSpan.FromMinutes(5);
         private long startedAt;
         private bool disposed;
+        private bool signaled;
 
         public TimeSpan Duration { get; private set; } = TimeSpan.FromMinutes(5);
         public OverlayTimerState State { get; private set; }
         public bool IsShown { get; private set; }
-        public TimeSpan Remaining => State == OverlayTimerState.Running
-            ? MaxZero(remainingAtStart - clock.GetElapsedTime(startedAt)) : remainingAtStart;
+        public TimeSpan Remaining => State is OverlayTimerState.Running or OverlayTimerState.Finished
+            ? remainingAtStart - clock.GetElapsedTime(startedAt) : remainingAtStart;
         public event Action? Changed;
         public event Action? Completed;
 
@@ -38,7 +39,7 @@ namespace GraphiteCompanion.Services
 
         public void SetSeconds(int seconds)
         {
-            if (disposed || State is OverlayTimerState.Running or OverlayTimerState.Paused) return;
+            if (disposed || State != OverlayTimerState.Ready) return;
             Duration = TimeSpan.FromSeconds(Math.Clamp(seconds, 1, 10800));
             Reset();
         }
@@ -46,9 +47,9 @@ namespace GraphiteCompanion.Services
         public void StartOrPause()
         {
             if (disposed) return;
-            if (State == OverlayTimerState.Running)
+            if (State is OverlayTimerState.Running or OverlayTimerState.Finished)
             {
-                if (CompleteIfDue()) return;
+                CompleteIfDue();
                 remainingAtStart = Remaining;
                 State = OverlayTimerState.Paused;
                 ticker.Stop();
@@ -57,7 +58,7 @@ namespace GraphiteCompanion.Services
             {
                 if (State != OverlayTimerState.Paused) remainingAtStart = Duration;
                 startedAt = clock.GetTimestamp();
-                State = OverlayTimerState.Running;
+                State = signaled?OverlayTimerState.Finished:OverlayTimerState.Running;
                 ticker.Start();
             }
             Changed?.Invoke();
@@ -67,6 +68,7 @@ namespace GraphiteCompanion.Services
         {
             if (disposed) return;
             ticker.Stop();
+            signaled=false;
             remainingAtStart = Duration;
             State = OverlayTimerState.Ready;
             Changed?.Invoke();
@@ -79,16 +81,13 @@ namespace GraphiteCompanion.Services
 
         private bool CompleteIfDue()
         {
-            if (disposed || State != OverlayTimerState.Running || Remaining > TimeSpan.Zero) return false;
-            ticker.Stop();
-            remainingAtStart = TimeSpan.Zero;
+            if (disposed || signaled || State != OverlayTimerState.Running || Remaining > TimeSpan.Zero) return false;
+            signaled=true;
             State = OverlayTimerState.Finished;
             Changed?.Invoke();
             Completed?.Invoke();
             return true;
         }
-
-        private static TimeSpan MaxZero(TimeSpan value) => value < TimeSpan.Zero ? TimeSpan.Zero : value;
 
         public void Dispose()
         {

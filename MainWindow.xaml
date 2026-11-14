@@ -191,6 +191,12 @@
                 <TextBlock Text="Микрофон" Margin="10,0,0,0" />
               </StackPanel>
             </RadioButton>
+            <RadioButton x:Name="TabMonitoring" GroupName="Tab" Style="{StaticResource SidebarNav}" Tag="Monitoring" Checked="Tab_Checked" ToolTip="Мониторинг компьютера">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="&#xE9D9;" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" FontSize="16" Width="24" />
+                <TextBlock Text="Мониторинг" Margin="10,0,0,0" />
+              </StackPanel>
+            </RadioButton>
             <RadioButton x:Name="TabRecord" GroupName="Tab" Style="{StaticResource SidebarNav}" Tag="Record" Checked="Tab_Checked" ToolTip="Запись экрана">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" FontSize="16" Width="24" />
@@ -210,6 +216,7 @@
                 <TextBlock Text="Автокликер" Margin="10,0,0,0" />
               </StackPanel>
             </RadioButton>
+
             <RadioButton x:Name="TabEffects" GroupName="Tab" Style="{StaticResource SidebarNav}" Tag="Effects" Checked="Tab_Checked" ToolTip="Эффекты">
               <StackPanel Orientation="Horizontal">
                 <TextBlock Text="" FontFamily="{StaticResource IconFont}" VerticalAlignment="Center" FontSize="16" Width="24" />
@@ -747,13 +754,13 @@
                     <Path x:Name="MicVoicePlotCurve" Stroke="{DynamicResource AccentBrush}" StrokeThickness="2" StrokeLineJoin="Round" IsHitTestVisible="False" />
                     <Line x:Name="MicVoicePlotCursor" Stroke="{DynamicResource SubTextBrush}" Opacity="0.65" Visibility="Collapsed" IsHitTestVisible="False" />
                   </Canvas>
-
+                    
                   </StackPanel>
                 </Border>
               </StackPanel>
             </Border>
           </Grid>
-
+          
         </StackPanel>
       </ScrollViewer>
       <Popup x:Name="MixerPopup" PlacementTarget="{Binding ElementName=MixerOpenButton}" Placement="Bottom" VerticalOffset="8" StaysOpen="False" AllowsTransparency="True" Opened="MixerPopup_Opened">
@@ -841,13 +848,14 @@
             <Button Style="{StaticResource GhostButton}" Content="Изменить…" Click="ChooseRecFolder_Click" ToolTip="Выбирает, куда сохранять ролики и снимки. Временный буфер повторов хранится отдельно; изменение папки не меняет длительность отката." Grid.Column="2" Margin="6,0,0,0" VerticalAlignment="Center" Padding="10,6" />
           </Grid>
         </Border>
-
+      
         </StackPanel>
       </ScrollViewer>
       <ScrollViewer x:Name="PageAutoClicker" Grid.Row="2" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <ContentControl x:Name="AutoClickerHost" />
       </ScrollViewer>
       <ContentControl x:Name="PageGallery" Grid.Row="2" Visibility="Collapsed" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"/>
+      <ContentControl x:Name="PageMonitoring" Grid.Row="2" Visibility="Collapsed" />
       <ScrollViewer x:Name="PageSettings" Grid.Row="2" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
         <Grid>
           <Grid.ColumnDefinitions>
@@ -882,6 +890,7 @@
                   </WrapPanel>
                   <TextBlock x:Name="CustomAccentHint" FontSize="12" Foreground="{DynamicResource SubTextBrush}" TextWrapping="Wrap" />
                 </StackPanel>
+                <ContentControl x:Name="BackgroundColorHost" />
               </StackPanel>
             </StackPanel>
           </Border>
@@ -917,3 +926,4 @@
     </Grid>
   </Grid>
 </Window>
+

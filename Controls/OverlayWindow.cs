@@ -78,6 +78,8 @@ namespace GraphiteCompanion.Controls
         internal bool IsDragging => dragOffset != null;
         private bool movedByUser;
         private bool firstPresentationPending;
+        private string foregroundAtOpen="";
+        private readonly DispatcherTimer displayChange=new(){Interval=TimeSpan.FromMilliseconds(150)};
         private MouseHookProc? mouseHookProc;
         private IntPtr mouseHook;
         private bool loading;
@@ -202,6 +204,8 @@ namespace GraphiteCompanion.Controls
             SizeChanged += (_, _) => ApplyNativeOpacity();
             IsVisibleChanged += (_, _) => { if(IsVisible)ApplyNativeOpacity(); };
             ContentRendered += (_, _) => { CompleteFirstPresentation(); ApplyNativeOpacity(); if (!movedByUser) PositionOverlay(); LogPresentation("rendered"); };
+            displayChange.Tick+=(_,_)=>{displayChange.Stop();RefreshDisplayBounds();};
+            Closed+=(_,_)=>displayChange.Stop();
 
             // ================= header: what is playing now + keyboard / close
             subtitle.SetResourceReference(TextBlock.ForegroundProperty, "SubTextBrush");
@@ -257,6 +261,7 @@ namespace GraphiteCompanion.Controls
             headerButtons.Children.Add(openApp);
             headerButtons.Children.Add(timerButton);
             headerButtons.Children.Add(clickerButton);
+            headerButtons.Children.Add(CreateGamesButton());
             headerButtons.Children.Add(keys);
             var customize = new Button { Content = "Изменить вид", Padding = new Thickness(10, 8, 10, 8), ToolTip = "Настроить оверлей" };
             customize.SetResourceReference(StyleProperty, "GhostButton");
@@ -473,7 +478,7 @@ namespace GraphiteCompanion.Controls
                 HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
                 Child = layoutContent,
             };
-            panel.SetResourceReference(Border.BackgroundProperty, "CardBrush");
+            panel.SetBinding(Border.BackgroundProperty,new System.Windows.Data.Binding("Background"){Source=this});
             panel.SetResourceReference(Border.BorderBrushProperty, "CardBorderBrush");
             panel.MouseLeftButtonDown += (_, _) => outputPopup.IsOpen = false;
             Content = panel;
@@ -499,6 +504,7 @@ namespace GraphiteCompanion.Controls
                 mouseHookProc = null;
                 outputPopup.IsOpen = false;
                 clickerPopup.IsOpen = false;
+                gamesPopup.IsOpen = false;
                 main.AutoClickerChanged -= RefreshClickerButton;
                 main.CompareOff();
             };
@@ -531,6 +537,8 @@ namespace GraphiteCompanion.Controls
             bool Inside(IntPtr window) => window != IntPtr.Zero && GetWindowRect(window, out var bounds) &&
                 pointer.X >= bounds.Left && pointer.X < bounds.Right && pointer.Y >= bounds.Top && pointer.Y < bounds.Bottom;
             if (Inside(hwnd)) return true;
+            if (Inside(nowPlaying.VolumePopupHandle)) return true;
+            if (gamesPopup.IsOpen && PresentationSource.FromVisual(gamesPopup.Child) is HwndSource games && Inside(games.Handle)) return true;
             if (outputPopup.IsOpen && PresentationSource.FromVisual(outputItems) is HwndSource output && Inside(output.Handle)) return true;
             if (clickerPopup.IsOpen && clickerPanel != null)
             {
@@ -544,6 +552,8 @@ namespace GraphiteCompanion.Controls
         }
         internal void DismissFromEscape()
         {
+            if (gamesPopup.IsOpen) { gamesPopup.IsOpen = false; return; }
+            if (nowPlaying.CloseVolumePopup()) return;
             if (main.AutoClickerState.Running) { main.StopAutoClicker(); return; }
             if (clickerPopup.IsOpen) { clickerPopup.IsOpen = false; return; }
             Close();
@@ -597,9 +607,10 @@ namespace GraphiteCompanion.Controls
         /// (WM_MOUSEACTIVATE → MA_NOACTIVATE); the global keyboard hook handles Escape.</summary>
         public void Open()
         {
+            foregroundAtOpen=OverlayDisplay.ForegroundDescription();
             SHQueryUserNotificationState(out fullscreenState);
             Refresh();
-            screenBounds = PointerScreen();
+            screenBounds = OverlayDisplay.ForegroundBounds()??PointerScreen();
             WindowStartupLocation = WindowStartupLocation.Manual;
             // The first HWND may still have its provisional size and background.
             // Keep it invisible until WPF has rendered and positioned the real panel.
@@ -608,8 +619,8 @@ namespace GraphiteCompanion.Controls
             new WindowInteropHelper(this).EnsureHandle();
             SetWindowPos(hwnd, new IntPtr(-1), screenBounds.Left + 16, screenBounds.Top + 16, 200, 200, 0x0010);
             double scale = Math.Max(96, GetDpiForWindow(hwnd)) / 96.0;
-            Width = Math.Min(layout.Width * layout.Scale, Math.Max(1, (screenBounds.Width - 32) / scale));
-            MaxHeight = Math.Max(1, (screenBounds.Height - 32) / scale);
+            var limits=OverlayDisplay.Limits(screenBounds,scale*96,layout.Width*layout.Scale);
+            Width = limits.Width;MaxHeight=limits.Height;
             ApplyNativeOpacity();
             Show();
             UpdateLayout();
@@ -714,6 +725,8 @@ namespace GraphiteCompanion.Controls
                 pointer.X >= bounds.Left && pointer.X < bounds.Right && pointer.Y >= bounds.Top && pointer.Y < bounds.Bottom) return;
             IntPtr hit = GetAncestor(WindowFromPhysicalPoint(pointer), 2 /* GA_ROOT */);
             if (hit == hwnd) return;
+            if (hit == nowPlaying.VolumePopupHandle) return;
+            if (gamesPopup.IsOpen && PresentationSource.FromVisual(gamesPopup.Child) is HwndSource games && hit == games.Handle) return;
             if (outputPopup.IsOpen && PresentationSource.FromVisual(outputItems) is HwndSource popup && hit == popup.Handle) return;
             if (clickerPopup.IsOpen)
             {
@@ -732,13 +745,15 @@ namespace GraphiteCompanion.Controls
                 File.AppendAllText(Path.Combine(SettingsStore.Folder, "overlay.log"),
                     $"[{DateTime.Now:O}] {stage} shellState={fullscreenState} " +
                     $"exclusiveD3D={fullscreenState == 3} exStyle=0x{GetWindowLong(hwnd, -20):X8} " +
-                    $"size={ActualWidth:0}x{ActualHeight:0} opacity={Opacity:0.0}\n");
+                    $"size={ActualWidth:0}x{ActualHeight:0} opacity={Opacity:0.0} bounds={screenBounds} dpi={GetDpiForWindow(hwnd)} foregroundBefore={foregroundAtOpen} foregroundNow={OverlayDisplay.ForegroundDescription()}\n");
             }
             catch { }
         }
 
         private IntPtr WindowProc(IntPtr h, int msg, IntPtr w, IntPtr l, ref bool handled)
         {
+            if(msg is 0x007e or 0x02e0){displayChange.Stop();displayChange.Start();}
+            if(msg==0x0006&&w.ToInt64()!=0)LogPresentation("activated");
             if (msg == DragMoveMessage)
             {
                 handled = true;
@@ -772,9 +787,18 @@ namespace GraphiteCompanion.Controls
             if (IsDragging || !IsVisible || hwnd == IntPtr.Zero || !GetWindowRect(hwnd, out var rect)) return;
             int width = rect.Right - rect.Left, height = rect.Bottom - rect.Top;
             double x = layout.RememberPosition ? layout.X ?? .5 : .5, y = layout.RememberPosition ? layout.Y ?? .5 : .5;
-            SetWindowPos(hwnd, new IntPtr(-1), screenBounds.Left + (int)(Math.Max(0, screenBounds.Width - width) * x),
-                screenBounds.Top + (int)(Math.Max(0, screenBounds.Height - height) * y), 0, 0,
+            var position=OverlayDisplay.Position(screenBounds,new(width,height),x,y);
+            SetWindowPos(hwnd, new IntPtr(-1), position.X,position.Y, 0, 0,
                 0x0001 | 0x0010 | 0x0040); // NOSIZE | NOACTIVATE | SHOWWINDOW
+        }
+
+        private void RefreshDisplayBounds()
+        {
+            if(!IsVisible||hwnd==IntPtr.Zero)return;if(IsDragging){dragOffset=null;dragMovePosted=endingDrag=false;if(dragArea.IsMouseCaptured)dragArea.ReleaseMouseCapture();nowPlaying.SetPanelMoving(false);}
+            // Preserve the user's normalized placement; a display change must not rewrite the profile.
+            screenBounds=OverlayDisplay.Bounds(hwnd)??PointerScreen();
+            var limits=OverlayDisplay.Limits(screenBounds,GetDpiForWindow(hwnd),layout.Width*layout.Scale);
+            Width=limits.Width;MaxHeight=limits.Height;UpdateLayout();PositionOverlay();LogPresentation("display-changed");
         }
 
         public void Refresh()
