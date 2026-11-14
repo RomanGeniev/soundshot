@@ -29,10 +29,9 @@ public sealed partial class OverlayWindow
         var buttons = new WrapPanel();
         buttons.Children.Add(SnapBoard.Button("Выбрать картинку…", () => {
             var picker = new OpenFileDialog { Title = "Картинка для оверлея", Filter = "Изображения|*.png;*.jpg;*.jpeg;*.bmp", CheckFileExists = true };
-            if (picker.ShowDialog(this) != true) return;
+            if (picker.ShowDialog(overlayBoard.EditorWindow??this) != true) return;
             try {
-                using var stream = File.OpenRead(picker.FileName);
-                var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 1024; bitmap.StreamSource = stream; bitmap.EndInit();
+                PictureLoader.Load(picker.FileName);
                 layout.ImagePath = picker.FileName; imageName.Text = Path.GetFileName(picker.FileName); ApplyAppearance();
             } catch (Exception) { imageName.Text = "Не удалось прочитать картинку. Выберите другой файл."; }
         }));
@@ -71,6 +70,7 @@ public sealed partial class OverlayWindow
         foreach(string color in new[]{"#141A26","#080C12","#17332D","#2E2240","#33241E","#F1F4F8"}){var swatch=new Button{Width=27,Height=27,Margin=new Thickness(0,0,6,4),ToolTip=color,Background=new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(color))};AutomationProperties.SetName(swatch,"Фон "+color);swatch.Click+=(_,_)=>colorInput.Text=color;palette.Children.Add(swatch);}panel.Children.Add(palette);panel.Children.Add(colorInput);
         colorInput.TextChanged+=(_,_)=>{bool valid=colorInput.Text.Length==0||System.Text.RegularExpressions.Regex.IsMatch(colorInput.Text,"^#[0-9A-Fa-f]{6}$");if(!valid){colorInput.BorderBrush=System.Windows.Media.Brushes.OrangeRed;return;}colorInput.ClearValue(BorderBrushProperty);layout.BackgroundColor=colorInput.Text;ApplyAppearance();};
         panel.Children.Add(SnapBoard.Button("Фон из темы",()=>colorInput.Text=""));
+        panel.Children.Add(new BackgroundImageSettings(()=>layout.BackgroundImagePath,()=>layout.BackgroundImageOpacity,(path,opacity)=>{layout.BackgroundImagePath=path;layout.BackgroundImageOpacity=opacity;ApplyAppearance();}));
         var checks = new StackPanel();
         void Check(string title, bool value, Action<bool> change) {
             var check = new CheckBox { Content = title, IsChecked = value, Margin = new Thickness(0, 0, 16, 6) }; check.SetResourceReference(StyleProperty, "Switch");

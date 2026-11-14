@@ -48,8 +48,8 @@ public sealed class RtssOutput : IDisposable
         string Plain(string s)=>new string(s.Where(c=>!char.IsControl(c)).ToArray()).Replace('<','‹').Replace('>','›');
         // Emit complete rows only. The SDK's extended text field is 4096 bytes, including terminator.
         var encoding=Ansi();foreach(var tile in p.Tiles){MetricValue? v=null;values?.TryGetValue(tile.MetricId,out v);string color=(tile.Color.Length>0?tile.Color:p.Foreground)[1..];
-            string line="<C="+color+">"+Plain(tile.Label.Length>0?tile.Label:v?.Name??tile.MetricId)+": "+Plain(MetricText.Format(stale?null:v?.Value,v?.Unit??"",p.ShowUnits))+"<C>\n";
-            if(encoding.GetByteCount(text.ToString())+encoding.GetByteCount(line)>4000){text.Append("...\n");break;}text.Append(line);}
+            string line=(text.Length>0?(p.Direction=="Inline"?"   ":"\n"):"")+"<C="+color+">"+Plain(tile.Label.Length>0?tile.Label:v?.Name??tile.MetricId)+": "+Plain(MetricText.Format(stale?null:v?.Value,v?.Unit??"",p.ShowUnits))+"<C>";
+            if(encoding.GetByteCount(text.ToString())+encoding.GetByteCount(line)>4000){text.Append(p.Direction=="Inline"?"   ...":"\n...");break;}text.Append(line);}
         return text.Length==0?"SoundShot: показатели не выбраны":text.ToString();
     }
     private static Encoding Ansi(){Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);return Encoding.GetEncoding((int)GetACP());}

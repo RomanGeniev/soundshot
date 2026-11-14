@@ -29,26 +29,30 @@ public sealed class MonitorProfile
     public string Monitor { get; set; } = "";
     public double X { get; set; } = .02;
     public double Y { get; set; } = .02;
+    public string Presentation { get; set; } = "Compact";
+    public string Direction { get; set; } = "Rows";
     public double Width { get; set; } = 320;
-    public double FontSize { get; set; } = 16;
+    public double FontSize { get; set; } = 14;
     public int Columns { get; set; } = 1;
-    public double Spacing { get; set; } = 5;
-    public double BackgroundOpacity { get; set; } = .75;
+    public double Spacing { get; set; } = 1;
+    public double BackgroundOpacity { get; set; } = 0;
     public string Background { get; set; } = "#101722";
     public string Foreground { get; set; } = "#E8EDF5";
     public bool ShowUnits { get; set; } = true;
     public List<MetricTile> Tiles { get; set; } = new()
     {
-        new() { MetricId="system/cpu",Label="CPU",View="Graph" },
-        new() { MetricId="system/gpu/load",Label="GPU",View="Graph" },
+        new() { MetricId="system/cpu",Label="CPU загрузка" },
+        new() { MetricId="system/gpu/load",Label="GPU загрузка" },
         new() { MetricId="system/memory/used",Label="RAM" },
         new() { MetricId="frames/fps",Label="FPS" },
-        new() { MetricId="frames/time",Label="Время кадра",View="Graph" }
+        new() { MetricId="frames/time",Label="Кадр" }
     };
     public MonitorProfile Copy(){var copy=(MonitorProfile)MemberwiseClone();copy.Tiles=(Tiles??new()).Where(t=>t!=null).Select(t=>t.Copy()).ToList();return copy;}
     public MonitorProfile Normalize()
     {
         var p=Copy();p.Id=string.IsNullOrWhiteSpace(p.Id)?Guid.NewGuid().ToString("N"):p.Id;
+        p.Presentation=p.Presentation=="Card"?"Card":"Compact";
+        p.Direction=p.Direction=="Inline"?"Inline":"Rows";
         p.Name=Clean(p.Name,48,"Основной");p.Monitor??="";
         p.X=Clamp(p.X,0,1,.02);p.Y=Clamp(p.Y,0,1,.02);p.Width=Clamp(p.Width,160,1600,320);
         p.FontSize=Clamp(p.FontSize,10,64,16);p.Columns=Math.Clamp(p.Columns,1,4);p.Spacing=Clamp(p.Spacing,0,30,5);
@@ -99,6 +103,15 @@ public sealed class MetricHistory
 }
 public static class MetricText
 {
+    public static string Label(MetricValue metric)
+    {
+        string device=metric.Group.StartsWith("GPU",StringComparison.OrdinalIgnoreCase)?"GPU":metric.Group.StartsWith("CPU",StringComparison.OrdinalIgnoreCase)?"CPU":"";
+        string kind=metric.Unit switch{"°C"=>"температура","МГц" or "Гц"=>"частота","%"=>"загрузка","Вт"=>"мощность","об/мин"=>"вентилятор",_=>""};
+        string name=metric.Name;
+        if(device.Length==0)return name;
+        if(name is "GPU Core" or "CPU Package" or "CPU Total")return device+" "+(kind.Length>0?kind:name);
+        return (name.StartsWith(device,StringComparison.OrdinalIgnoreCase)?"":device+" · ")+name+(kind.Length>0&&!name.Contains(kind,StringComparison.OrdinalIgnoreCase)?" · "+kind:"");
+    }
     public static string Format(double? value,string unit,bool showUnit=true)
     {
         if(value is not { } v||!double.IsFinite(v))return "—";

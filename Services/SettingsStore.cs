@@ -83,6 +83,8 @@ namespace GraphiteCompanion.Services
         public string Theme { get; set; } = "Dark";
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? BackgroundColor { get; set; }
+        public string BackgroundImagePath { get; set; } = "";
+        public double BackgroundImageOpacity { get; set; } = .35;
         public string Accent { get; set; } = "Violet";
         public string CustomAccent { get; set; } = "#22D3EE";
         public bool PushToTalk { get; set; }

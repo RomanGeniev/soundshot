@@ -39,6 +39,8 @@ namespace GraphiteCompanion
             ThemeLight.IsChecked = settings.Theme == "Light";
             ThemeSystem.IsChecked = settings.Theme == "System";
             BackgroundColorHost.Content = backgroundColors = new Controls.BackgroundColorSettings(() => settings.BackgroundColor, value => { settings.BackgroundColor = value; ApplyTheme(); });
+            BackgroundImageHost.Content = new Controls.BackgroundImageSettings(()=>settings.BackgroundImagePath,()=>settings.BackgroundImageOpacity,(path,opacity)=>{settings.BackgroundImagePath=path;settings.BackgroundImageOpacity=opacity;AppBackgroundPicture.Apply(path,opacity);ScheduleSave();});
+            AppBackgroundPicture.Apply(settings.BackgroundImagePath,settings.BackgroundImageOpacity);
             RefreshThemeChoices();
             RefreshCustomAccent();
             var accent = ThemeManager.Current;

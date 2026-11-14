@@ -13,6 +13,9 @@ public sealed class OverlayBlock
 
 public sealed class OverlayLayout
 {
+    public List<OverlayAttachment> Attachments { get; set; } = new();
+    public string BackgroundImagePath { get; set; } = "";
+    public double BackgroundImageOpacity { get; set; } = .35;
     public CanvasLayout? Composition { get; set; }
     public double Opacity { get; set; } = 1;
     public string BackgroundColor { get; set; } = "";
@@ -39,6 +42,8 @@ public sealed class OverlayLayout
     {
         Composition = Composition?.Copy(), Opacity = Opacity, Scale = Scale, Width = Width, Footer = Footer, RememberPosition = RememberPosition,
         X = X, Y = Y, Note = Note, ImagePath = ImagePath, BackgroundColor=BackgroundColor,
+        BackgroundImagePath=BackgroundImagePath, BackgroundImageOpacity=BackgroundImageOpacity,
+        Attachments=(Attachments??new()).Where(x=>x!=null).Select(x=>x.Copy()).ToList(),
         MusicButtons=(MusicButtons??new()).Where(p=>p.Value!=null).ToDictionary(p=>p.Key,p=>p.Value.Copy()),
         Blocks = (Blocks ?? new()).Where(x => x != null).Select(x => new OverlayBlock { Id = x.Id, Zone = x.Zone, Visible = x.Visible }).ToList()
     };
@@ -46,15 +51,32 @@ public sealed class OverlayLayout
     {
         Opacity = double.IsFinite(Opacity) ? Math.Clamp(Opacity, .35, 1) : 1;
         BackgroundColor=MonitorProfile.Color(BackgroundColor,"");
+        BackgroundImagePath ??= "";
+        BackgroundImageOpacity=MonitorProfile.Clamp(BackgroundImageOpacity,0,1,.35);
+        Attachments=(Attachments??new()).Where(x=>x!=null && x.Id?.StartsWith("attachment:",StringComparison.Ordinal)==true && x.Kind is "note" or "image").DistinctBy(x=>x.Id).ToList();
+        foreach(var item in Attachments){item.Text??="";item.ImagePath??="";item.Name=string.IsNullOrWhiteSpace(item.Name)?(item.Kind=="note"?"Заметка":"Картинка"):item.Name;}
         MusicButtons=(MusicButtons??new()).Where(p=>p.Key is "previous" or "play" or "next"&&p.Value!=null).ToDictionary(p=>p.Key,p=>new CanvasPosition{X=MonitorProfile.Clamp(p.Value.X,0,1,1),Y=MonitorProfile.Clamp(p.Value.Y,0,1,.5)});
         Scale = double.IsFinite(Scale) ? Math.Clamp(Scale, .8, 1.25) : 1;
         Width = double.IsFinite(Width) ? Math.Clamp(Width, 820, 1200) : 960;
         X = X is double x && double.IsFinite(x) ? Math.Clamp(x, 0, 1) : null;
         Y = Y is double y && double.IsFinite(y) ? Math.Clamp(y, 0, 1) : null;
         Note ??= ""; ImagePath ??= ""; if (Note.Length > 500) Note = Note[..500];
-        Blocks = (Blocks ?? new()).Where(x => x != null && Catalog.Any(c => c.Id == x.Id)).DistinctBy(x => x.Id).ToList();
+        var allowed=Catalog.Select(c=>c.Id).Concat(Attachments.Select(x=>x.Id)).ToHashSet();
+        Blocks = (Blocks ?? new()).Where(x => x != null && allowed.Contains(x.Id)).DistinctBy(x => x.Id).ToList();
         foreach (var entry in Catalog) if (!Blocks.Any(x => x.Id == entry.Id)) Blocks.Add(new() { Id = entry.Id, Zone = entry.Zone, Visible = entry.Visible });
+        foreach(var item in Attachments)if(!Blocks.Any(x=>x.Id==item.Id))Blocks.Add(new(){Id=item.Id,Zone=item.Kind=="note"?1:2});
+        if(Composition!=null){Composition.Blocks.RemoveAll(x=>x.Id.StartsWith("attachment:",StringComparison.Ordinal)&&!allowed.Contains(x.Id));foreach(var item in Attachments)if(!Composition.Blocks.Any(x=>x.Id==item.Id))Composition.Blocks.Add(new(){Id=item.Id,Zone=item.Kind=="note"?1:2});}
         foreach (var block in Blocks) block.Zone = Math.Clamp(block.Zone, 0, 2);
         return this;
     }
+}
+
+public sealed class OverlayAttachment
+{
+    public string Id { get; set; } = "attachment:"+Guid.NewGuid().ToString("N");
+    public string Kind { get; set; } = "note";
+    public string Name { get; set; } = "";
+    public string Text { get; set; } = "";
+    public string ImagePath { get; set; } = "";
+    public OverlayAttachment Copy() => new(){Id=Id,Kind=Kind,Name=Name,Text=Text,ImagePath=ImagePath};
 }

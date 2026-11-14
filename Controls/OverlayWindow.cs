@@ -462,7 +462,7 @@ namespace GraphiteCompanion.Controls
 
             // ================= configurable blocks
             nowPlaying = new NowPlayingCard(main);
-            layout = main.GetOverlayLayout();
+            layout = main.GetOverlayLayout().Normalize();
             InitializeBlocks(left, right, modeBox, eqRow, volRow, recRow, appsScroll);
             overlayBoard.ModeChanged += () => { openApp.IsEnabled = timerButton.IsEnabled = clickerButton.IsEnabled = keys.IsEnabled = !IsLayoutEditing; };
             footer.SetResourceReference(TextBlock.ForegroundProperty, "SubTextBrush");
@@ -472,11 +472,12 @@ namespace GraphiteCompanion.Controls
             DockPanel.SetDock(clickerPopup, Dock.Bottom); layoutDock.Children.Add(clickerPopup);
             overlayBoard.Margin = new Thickness(24, 0, 24, 8); layoutDock.Children.Add(overlayBoard);
 
+            var backdrop = new Grid();backdrop.Children.Add(backgroundPicture);backdrop.Children.Add(layoutContent);
             var panel = new Border
             {
                 CornerRadius = new CornerRadius(0), BorderThickness = new Thickness(1),
                 HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Stretch,
-                Child = layoutContent,
+                Child = backdrop,
             };
             panel.SetBinding(Border.BackgroundProperty,new System.Windows.Data.Binding("Background"){Source=this});
             panel.SetResourceReference(Border.BorderBrushProperty, "CardBorderBrush");

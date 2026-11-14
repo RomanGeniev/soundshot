@@ -92,7 +92,7 @@ public partial class MainWindow
         var appearance = Card("Settings.appearance", "Оформление", "Settings.columns", 0);
         var appearancePanel = (StackPanel)((StackPanel)((Border)appearance.Element).Child).Children[1];
         CanvasParts.Join(appearancePanel, 1, 2);
-        appearance.Inside.Add(new("Settings.appearanceOptions", "Оформление", appearancePanel, "Тема", "Цвет интерфейса", "Свой цвет", "Фон приложения"));
+        appearance.Inside.Add(new("Settings.appearanceOptions", "Оформление", appearancePanel, "Тема", "Цвет интерфейса", "Свой цвет", "Фон приложения", "Картинка на фоне"));
         var behavior = Card("Settings.application", "Настройки приложения", "Settings.columns", 1, 2); behavior.Inside.Add(Old("Settings.behavior"));
         Mount(PageSettings, Board("Settings", appearance, behavior));
 

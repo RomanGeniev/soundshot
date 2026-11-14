@@ -18,6 +18,7 @@ public sealed partial class SnapBoard
     private readonly Stack<CanvasLayout> undo=new();
     private CanvasLayout? operationBefore;
     internal bool IsInspector(Window window)=>ReferenceEquals(window,inspectorWindow);
+    internal Window? EditorWindow=>inspectorWindow??Window.GetWindow(this);
     // Standalone editors already own a window; keep their actions in that same window.
     public FrameworkElement EmbedEditorTools()
     {
@@ -65,11 +66,12 @@ public sealed partial class SnapBoard
     private void RenderInspector()
     {
         toolbar.Children.Clear();toolbarSurface.Visibility=Editing?Visibility.Visible:Visibility.Collapsed;root.MinHeight=64;if(!Editing)return;
-        if(!embeddedInspector){var hint=Text("Блок: ⠿ — двигать · угол — масштаб · линии помогают выровнять\nВнутри: переставляйте элементы · × — скрыть · ниже — вернуть");hint.FontSize=12;hint.Margin=new Thickness(3,0,3,8);hint.SetResourceReference(TextBlock.ForegroundProperty,"SubTextBrush");toolbar.Children.Add(hint);}
+        if(!embeddedInspector){var hint=Text("Блок: ⠿ — двигать · края и углы — размер · линии помогают выровнять\nВнутри: переставляйте элементы · × — скрыть · ниже — вернуть");hint.FontSize=12;hint.Margin=new Thickness(3,0,3,8);hint.SetResourceReference(TextBlock.ForegroundProperty,"SubTextBrush");toolbar.Children.Add(hint);}
         var actions=new WrapPanel();var back=Button("↶ Отменить шаг",Undo,"Отменить последнее изменение · Ctrl+Z");back.IsEnabled=undo.Count>0;actions.Children.Add(back);
         var done=Button("Готово",()=>Finish(true),"Сохранить все изменения вида");done.SetResourceReference(StyleProperty,"AccentButton");actions.Children.Add(done);actions.Children.Add(Button("Отмена",()=>Finish(false),"Вернуть вид до начала редактирования"));
         if(Appearance!=null)actions.Children.Add(Button("Прозрачность и вид",()=>{inspectorAppearance=!inspectorAppearance;inspectorDetail="";RenderInspector();}));
         if(selectedElement?.HasOptions==true)actions.Children.Add(selectedElement.ContextActions());toolbar.Children.Add(actions);
+        if(AddActions.Count>0){var additions=new WrapPanel{Margin=new Thickness(3,8,3,0)};foreach(var action in AddActions)additions.Children.Add(Button(action.Label,action.Add));toolbar.Children.Add(additions);}
         var hidden=new WrapPanel{Margin=new Thickness(3,8,3,0)};hidden.Children.Add(Text("Скрытое: "));int count=0;
         foreach(var block in state.Blocks.Where(b=>!b.Visible&&tiles.ContainsKey(b.Id)))
         {

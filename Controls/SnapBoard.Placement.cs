@@ -14,6 +14,8 @@ public sealed partial class SnapBoard
     private CanvasLayout? placementBaseline;
     private readonly PlacementGuides placementGuides=new();
     internal bool HasPositions=>state.DesignWidth>0&&!SingleColumn;
+    internal double ResizeFit=>HasPositions?Math.Max(.01,canvas.Fit):1;
+    private readonly Dictionary<string,Size> resizeBounds=new();
 
     private void PrepareRestoredCards()
     {
@@ -68,20 +70,33 @@ public sealed partial class SnapBoard
     }
     private void BeginBlockResize()
     {
-        BeginOperation();if(!SingleColumn)placementBaseline=PositionedSnapshot();
+        BeginOperation();resizeBounds.Clear();double fit=ResizeFit;
+        foreach(var pair in tiles)resizeBounds[pair.Key]=new Size(pair.Value.ActualWidth/fit,pair.Value.ActualHeight/fit);
+        if(!SingleColumn)placementBaseline=PositionedSnapshot();
     }
     private void ResizeBlock(string id,LayoutSize size)
     {
         if(SingleColumn){state.Blocks.First(b=>b.Id==id).Size=size;tiles[id].SetSize(size);canvas.InvalidateMeasure();return;}
         var next=(placementBaseline??PositionedSnapshot()).Copy();var b=next.Blocks.First(b=>b.Id==id);
+        var tile=tiles[id];var originalSize=resizeBounds.TryGetValue(id,out var bounds)?bounds:new Size(b.Size.Width,b.Size.Height);
+        double right=b.Position!.X+originalSize.Width,bottom=b.Position.Y+originalSize.Height;
         b.Size=size.Copy();
-        b.Position!.X=Math.Min(b.Position.X,Math.Max(0,next.DesignWidth-b.Size.Width));
+        if(b.Size.FreeAspect){
+            // Clamp the moving edge against the canvas while keeping its opposite
+            // edge at the gesture baseline, never at the previous preview.
+            double maxWidth=tile.ResizeFromLeft?right:Math.Max(1,next.DesignWidth-b.Position.X);
+            b.Size.ReferenceWidth=Math.Min(b.Size.Width,maxWidth)/b.Size.Scale;
+            if(tile.ResizeFromTop)b.Size.ReferenceHeight=Math.Min(b.Size.Height,bottom)/b.Size.Scale;
+            b.Size.Normalize();
+        }
+        b.Position.X=tile.ResizeFromLeft?Math.Max(0,right-b.Size.Width):Math.Min(b.Position.X,Math.Max(0,next.DesignWidth-b.Size.Width));
+        if(tile.ResizeFromTop)b.Position.Y=Math.Max(0,bottom-b.Size.Height);
         ApplyPositionPreview(next,id);
     }
     private void CompletePlacement(bool accepted)
     {
         if(accepted&&state.DesignWidth>0&&!SingleColumn)state=PositionedSnapshot();
-        canvas.Layout=state;canvas.MovingId=null;placementBaseline=null;placementGuides.Clear();canvas.InvalidateMeasure();
+        canvas.Layout=state;canvas.MovingId=null;placementBaseline=null;resizeBounds.Clear();placementGuides.Clear();canvas.InvalidateMeasure();
     }
     private void NudgeBlock(string id,Vector delta)
     {

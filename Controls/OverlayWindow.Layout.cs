@@ -24,6 +24,7 @@ public sealed partial class OverlayWindow
     private readonly TextBlock imageError = new() { Text = "Выберите блок, затем нажмите «Картинка»", TextWrapping = TextWrapping.Wrap };
     private string? loadedImage;
     private MusicPlacementEditor? musicPlacementEditor;
+    private readonly BackgroundPicture backgroundPicture = new();
     private CanvasLayout Composition() => layout.Composition?.Copy() ?? new() { Blocks = layout.Blocks.Select(b => new CanvasBlock { Id = b.Id, Zone = b.Zone, Visible = b.Visible }).ToList() };
     private void RememberComposition()
     {
@@ -72,9 +73,11 @@ public sealed partial class OverlayWindow
         cards["timer"].Inside.Add(new("Overlay.timer", "Таймер", CanvasParts.Wrap(timerRow), "Минуты", "Секунды", "Пуск / пауза", "Сбросить"));
         cards["note"].Options = NoteOptions(); cards["note"].InsideLabel="Текст заметки"; cards["image"].Options = ImageOptions(); cards["image"].InsideLabel="Картинка";
         overlayBoard = new SnapBoard(cards.Values, Composition());
+        overlayBoard.AddActions.Add(("＋ Заметку",AddNote));
+        overlayBoard.AddActions.Add(("＋ Картинки…",AddPictures));
         overlayBoard.ModeChanged += () => { RefreshTimerVisibility(); };
         overlayBoard.Finished += save => {
-            if (save) { RememberComposition(); main.SaveOverlayLayout(layout); }
+            if (save) { RememberComposition(); PruneAttachments(); main.SaveOverlayLayout(layout); }
             else if (beforeEditing != null) ApplyLayout(beforeEditing);
             beforeEditing = null; RefreshTimerVisibility();
             if (hwnd != IntPtr.Zero) SetWindowLong(hwnd, -20, GetWindowLong(hwnd, -20) | 0x08000000);
@@ -84,6 +87,7 @@ public sealed partial class OverlayWindow
     private void ApplyLayout(OverlayLayout value)
     {
         layout = value.Copy().Normalize();
+        SyncAttachments();
         overlayBoard.Apply(Composition());
         ApplyAppearance();
     }
@@ -91,6 +95,7 @@ public sealed partial class OverlayWindow
     {
         if(layout.BackgroundColor.Length>0)Background=new System.Windows.Media.SolidColorBrush((System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(layout.BackgroundColor));
         else SetResourceReference(BackgroundProperty,"CardBrush");
+        backgroundPicture.Apply(layout.BackgroundImagePath,layout.BackgroundImageOpacity);
         nowPlaying.PlaceButtons(layout.MusicButtons);
         footer.Visibility = layout.Footer ? Visibility.Visible : Visibility.Collapsed;
         noteText.Text = string.IsNullOrWhiteSpace(layout.Note) ? "Ваша заметка — выберите этот блок и нажмите «Текст заметки»" : layout.Note;
@@ -101,8 +106,7 @@ public sealed partial class OverlayWindow
             {
                 if (!string.IsNullOrEmpty(loadedImage))
                 {
-                    using var stream = File.OpenRead(loadedImage);
-                    var bitmap = new BitmapImage(); bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad; bitmap.DecodePixelWidth = 1024; bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze(); customImage.Source = bitmap;
+                    customImage.Source = PictureLoader.Load(loadedImage);
                 }
             }
             catch (Exception) { imageError.Text = "Картинка недоступна. Выберите другую в настройках оверлея."; }

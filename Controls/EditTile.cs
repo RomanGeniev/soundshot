@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -24,7 +25,7 @@ public sealed class EditTile : Border
     private readonly Rectangle landing;
     private readonly StackPanel actions=new(){Orientation=Orientation.Horizontal};
     private readonly TextBlock moveGrip;
-    private readonly Thumb widthGrip,heightGrip,cornerGrip;
+    private readonly List<Thumb> resizeGrips=new();
     private readonly object scope;
     private readonly string id,name;
     private readonly Action? insideAction,sizeAction;
@@ -47,6 +48,8 @@ public sealed class EditTile : Border
     internal string Id=>id;
     internal object Scope=>scope;
     internal Point DragGrab {get;private set;}
+    internal bool ResizeFromLeft {get;private set;}
+    internal bool ResizeFromTop {get;private set;}
     internal event Action<Vector>? Nudge;
     internal double PreferredWidth=>size.Width;
     public event Action<EditTile>? Selected;
@@ -65,7 +68,7 @@ public sealed class EditTile : Border
         if(inside!=null)actions.Children.Add(IconButton(false,"Настроить: "+name,inside));
         actions.Children.Add(IconButton(true,"Скрыть «"+name+"». Вернуть можно на полке «Скрытое»",hide));chrome.Children.Add(actions);
         moveGrip=new TextBlock{Text="⠿",FontSize=12,Width=12,Height=14,TextAlignment=TextAlignment.Center,Cursor=Cursors.SizeAll,ToolTip="Перетащите весь блок: "+name};moveGrip.SetResourceReference(TextBlock.ForegroundProperty,"SubTextBrush");moveGrip.SetResourceReference(TextBlock.BackgroundProperty,"CardBrush");chrome.Children.Add(moveGrip);
-        widthGrip=MakeGrip("width",Cursors.SizeWE);heightGrip=MakeGrip("height",Cursors.SizeNS);cornerGrip=MakeGrip("both",Cursors.SizeNWSE);chrome.Children.Add(widthGrip);chrome.Children.Add(heightGrip);chrome.Children.Add(cornerGrip);surface.Children.Add(chrome);Child=surface;
+        foreach(var edge in new[]{"w","e","n","s","nw","ne","sw","se"}){var grip=MakeGrip(edge,edge is "w" or "e"?Cursors.SizeWE:edge is "n" or "s"?Cursors.SizeNS:edge is "nw" or "se"?Cursors.SizeNWSE:Cursors.SizeNESW);resizeGrips.Add(grip);chrome.Children.Add(grip);}surface.Children.Add(chrome);Child=surface;
         Point start=default;bool pressed=false;
         PreviewMouseLeftButtonDown+=(_,e)=>{if(!editable||Nearest(e.OriginalSource as DependencyObject)!=this||IsTool(e.OriginalSource as DependencyObject))return;Selected?.Invoke(this);Focus();pressed=true;start=e.GetPosition(this);CaptureMouse();e.Handled=true;};
         PreviewMouseLeftButtonUp+=(_,e)=>{if(!pressed)return;pressed=false;ReleaseMouseCapture();e.Handled=true;};
@@ -80,7 +83,7 @@ public sealed class EditTile : Border
         };
         PreviewKeyDown+=(_,e)=>{
             if(!editable||Nearest(e.OriginalSource as DependencyObject)!=this)return;
-            if(e.Key==Key.Escape&&resizeBefore!=null){foreach(var t in new[]{widthGrip,heightGrip,cornerGrip})if(t.IsDragging)t.CancelDrag();e.Handled=true;return;}
+            if(e.Key==Key.Escape&&resizeBefore!=null){foreach(var t in resizeGrips)if(t.IsDragging)t.CancelDrag();e.Handled=true;return;}
             if(e.OriginalSource is Thumb)return;
             if(e.Key is Key.Left or Key.Up or Key.Right or Key.Down){if(Nudge!=null)Nudge.Invoke(e.Key switch{Key.Left=>new Vector(-8,0),Key.Right=>new Vector(8,0),Key.Up=>new Vector(0,-8),_=>new Vector(0,8)});else MoveByKeyboard?.Invoke(e.Key is Key.Left or Key.Up?-1:1);e.Handled=true;}else if(e.Key is Key.Enter or Key.Space)e.Handled=true;
         };
@@ -89,22 +92,21 @@ public sealed class EditTile : Border
     private bool IsTool(DependencyObject? n){bool tool=false;for(;n!=null&&n!=this;n=GetParentNode(n)){if(n is ButtonBase or Thumb)tool=true;if(n==chrome)return tool;}return false;}
     private static DependencyObject? GetParentNode(DependencyObject n)=>n is Visual or System.Windows.Media.Media3D.Visual3D?VisualTreeHelper.GetParent(n):LogicalTreeHelper.GetParent(n);
     private static EditTile? Nearest(DependencyObject? n){for(;n!=null;n=GetParentNode(n))if(n is EditTile t)return t;return null;}
-    private Thumb MakeGrip(string axis,Cursor cursor)
+    private Thumb MakeGrip(string edge,Cursor cursor)
     {
-        var grip=new Thumb{Width=axis=="height"?26:18,Height=axis=="width"?26:18,Cursor=cursor,ToolTip=axis=="width"?"Тяните: ширина":axis=="height"?"Тяните: высота":"Тяните: ширина и высота"};AutomationProperties.SetName(grip,name+": "+(axis=="width"?"ширина":axis=="height"?"высота":"размер"));
-        var mark=new FrameworkElementFactory(typeof(Border));mark.SetValue(Border.WidthProperty,axis=="height"?18d:7d);mark.SetValue(Border.HeightProperty,axis=="width"?18d:7d);mark.SetValue(Border.CornerRadiusProperty,new CornerRadius(2));mark.SetValue(Border.BorderThicknessProperty,new Thickness(1));mark.SetValue(HorizontalAlignmentProperty,HorizontalAlignment.Center);mark.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);mark.SetResourceReference(Border.BorderBrushProperty,"SubTextBrush");mark.SetResourceReference(Border.BackgroundProperty,"CardBrush");
+        bool side=edge is "w" or "e",horizontal=edge is "n" or "s";
+        string label=edge switch{"w"=>"левый край","e"=>"правый край","n"=>"верхний край","s"=>"нижний край","nw"=>"левый верхний угол","ne"=>"правый верхний угол","sw"=>"левый нижний угол",_=>"правый нижний угол"};
+        var grip=new Thumb{Tag=edge,Cursor=cursor,ToolTip="Тяните "+label+": "+(side?"ширина":horizontal?"высота":"ширина и высота")};AutomationProperties.SetName(grip,name+": "+label);
+        var mark=new FrameworkElementFactory(typeof(Border));mark.SetValue(Border.WidthProperty,horizontal?18d:side?3d:6d);mark.SetValue(Border.HeightProperty,side?18d:horizontal?3d:6d);mark.SetValue(Border.CornerRadiusProperty,new CornerRadius(2));mark.SetValue(Border.BorderThicknessProperty,new Thickness(1));mark.SetValue(HorizontalAlignmentProperty,HorizontalAlignment.Center);mark.SetValue(VerticalAlignmentProperty,VerticalAlignment.Center);mark.SetResourceReference(Border.BorderBrushProperty,"SubTextBrush");mark.SetResourceReference(Border.BackgroundProperty,"CardBrush");
         var hitArea=new FrameworkElementFactory(typeof(Grid));hitArea.SetValue(Panel.BackgroundProperty,Brushes.Transparent);hitArea.AppendChild(mark);grip.Template=new ControlTemplate(typeof(Thumb)){VisualTree=hitArea};
-        double w=0,h=0,dx=0,dy=0,startScale=1;
-        bool resized=false;
+        Size bounds=default;Point pointer=default;double fit=1;
         LayoutSize? reference=null;
-        bool CanResize()=>axis=="both"&&scope is SnapBoard&&ShowResizeGrip&&sizeAction!=null&&editable;
-        LayoutSize Capture(){var result=size.Copy();if(!result.Proportional){result.ReferenceWidth=ActualWidth/size.Scale;result.ReferenceHeight=ActualHeight/size.Scale;}return result;}
-        LayoutSize Scaled(double ratio){var next=reference!.Copy();next.Scale=Math.Clamp(startScale*ratio,Math.Min(.5,startScale),1.5);next.Normalize();return next;}
-        grip.ToolTip="Тяните угол: масштаб блока с сохранением пропорций";
-        grip.DragStarted+=(_,e)=>{if(!CanResize())return;activeResize=grip;Selected?.Invoke(this);resizeBefore=size.Copy();reference=Capture();w=ActualWidth;h=ActualHeight;dx=dy=0;resized=false;startScale=scope is SnapBoard {HasPositions:true}?size.Scale:ActualWidth/reference.ReferenceWidth;ResizeStarted?.Invoke();e.Handled=true;};
-        grip.DragDelta+=(_,e)=>{if(resizeBefore==null||!CanResize())return;dx+=e.HorizontalChange;dy+=e.VerticalChange;if(!resized&&Math.Abs(dx)+Math.Abs(dy)<.001)return;resized=true;double ratio=1+(dx*w+dy*h)/Math.Max(1,w*w+h*h);SizeChangedByUser?.Invoke(Scaled(ratio));e.Handled=true;};
-        grip.DragCompleted+=(_,e)=>{if(resizeBefore==null)return;if(e.Canceled)SizeChangedByUser?.Invoke(resizeBefore);resizeBefore=null;reference=null;activeResize=null;ResizeFinished?.Invoke(!e.Canceled);e.Handled=true;};
-        grip.KeyDown+=(_,e)=>{if(!CanResize()||e.Key is not(Key.Left or Key.Right or Key.Up or Key.Down))return;reference=Capture();startScale=scope is SnapBoard {HasPositions:true}?size.Scale:ActualWidth/reference.ReferenceWidth;ResizeStarted?.Invoke();SizeChangedByUser?.Invoke(Scaled(e.Key is Key.Left or Key.Up?.95:1.05));reference=null;ResizeFinished?.Invoke(true);e.Handled=true;};return grip;
+        bool CanResize()=>scope is SnapBoard&&ShowResizeGrip&&sizeAction!=null&&editable;
+        void Capture(){var board=(SnapBoard)scope;fit=board.ResizeFit;bounds=new Size(ActualWidth/fit,ActualHeight/fit);reference=size.Copy();if(reference.Proportional&&!board.HasPositions)reference.Scale=ActualWidth/reference.ReferenceWidth;reference.ReferenceWidth=bounds.Width/reference.Scale;reference.ReferenceHeight=bounds.Height/reference.Scale;reference.Normalize();ResizeFromLeft=edge.Contains('w');ResizeFromTop=edge.Contains('n');}
+        grip.DragStarted+=(_,e)=>{if(!CanResize())return;activeResize=grip;Selected?.Invoke(this);resizeBefore=size.Copy();Capture();pointer=Mouse.GetPosition(((SnapBoard)scope).DragSurface);ResizeStarted?.Invoke();e.Handled=true;};
+        grip.DragDelta+=(_,e)=>{if(resizeBefore==null||reference==null||!CanResize())return;var delta=(Mouse.GetPosition(((SnapBoard)scope).DragSurface)-pointer)/fit;SizeChangedByUser?.Invoke(BlockResize.Apply(reference,bounds,delta,edge));e.Handled=true;};
+        grip.DragCompleted+=(_,e)=>{if(resizeBefore==null)return;if(e.Canceled)SizeChangedByUser?.Invoke(resizeBefore);resizeBefore=null;reference=null;activeResize=null;ResizeFinished?.Invoke(!e.Canceled);ResizeFromLeft=ResizeFromTop=false;e.Handled=true;};
+        grip.KeyDown+=(_,e)=>{if(!CanResize()||e.Key is not(Key.Left or Key.Right or Key.Up or Key.Down))return;Capture();var delta=e.Key switch{Key.Left=>new Vector(-8,0),Key.Right=>new Vector(8,0),Key.Up=>new Vector(0,-8),_=>new Vector(0,8)};ResizeStarted?.Invoke();SizeChangedByUser?.Invoke(BlockResize.Apply(reference!,bounds,delta,edge));reference=null;ResizeFinished?.Invoke(true);ResizeFromLeft=ResizeFromTop=false;e.Handled=true;};return grip;
     }
     private static Button IconButton(bool remove,string title,Action action)
     {
@@ -112,7 +114,7 @@ public sealed class EditTile : Border
     }
     public void SetSize(LayoutSize? value)
     {
-        var next=(value??new()).Copy();next.Normalize();if(size.Scale==next.Scale&&size.Width==next.Width&&size.Height==next.Height&&size.ReferenceWidth==next.ReferenceWidth&&size.ReferenceHeight==next.ReferenceHeight)return;size=next;
+        var next=(value??new()).Copy();next.Normalize();if(size.Scale==next.Scale&&size.Width==next.Width&&size.Height==next.Height&&size.ReferenceWidth==next.ReferenceWidth&&size.ReferenceHeight==next.ReferenceHeight&&size.FreeAspect==next.FreeAspect)return;size=next;
         if(size.Proportional){
             if(Element.Parent==surface){surface.Children.Remove(Element);proportionalContent.Children.Add(Element);proportionalHost.Child=proportionalContent;surface.Children.Insert(0,proportionalHost);}
             surface.LayoutTransform=Transform.Identity;proportionalHost.Configure(size);
@@ -133,7 +135,7 @@ public sealed class EditTile : Border
     {
         chrome.Visibility=editable&&Element.ActualWidth>1&&Element.ActualHeight>1?Visibility.Visible:Visibility.Collapsed;outline.SetResourceReference(BorderBrushProperty,selected?"AccentBrush":"CardBorderBrush");outline.BorderThickness=new Thickness(selected?2:1);outline.Opacity=selected?1:.45;
         actions.Visibility=InlineActions&&selected&&!dragging?Visibility.Visible:Visibility.Collapsed;if(actions.Children.Count>1)actions.Children[0].Visibility=HasOptions?Visibility.Visible:Visibility.Collapsed;
-        moveGrip.Visibility=IsContainer&&!dragging&&(scope is SnapBoard||selected||IsMouseOver)?Visibility.Visible:Visibility.Collapsed;widthGrip.Visibility=heightGrip.Visibility=Visibility.Collapsed;cornerGrip.Visibility=ShowResizeGrip&&sizeAction!=null&&!dragging&&scope is SnapBoard?Visibility.Visible:Visibility.Collapsed;landing.Visibility=dragging?Visibility.Visible:Visibility.Collapsed;
+        moveGrip.Visibility=IsContainer&&!dragging&&(scope is SnapBoard||selected||IsMouseOver)?Visibility.Visible:Visibility.Collapsed;foreach(var grip in resizeGrips)grip.Visibility=ShowResizeGrip&&sizeAction!=null&&!dragging&&scope is SnapBoard?Visibility.Visible:Visibility.Collapsed;landing.Visibility=dragging?Visibility.Visible:Visibility.Collapsed;
     }
     public void Dim(bool value){IsHitTestVisible=!value;}
     internal static Payload? Read(DragEventArgs e,object scope)=>e.Data.GetData(typeof(Payload)) is Payload p&&ReferenceEquals(p.Scope,scope)?p:null;
@@ -142,6 +144,18 @@ public sealed class EditTile : Border
     {
         public bool Outer {get;set;}
         protected override Size MeasureOverride(Size available){foreach(UIElement c in Children)c.Measure(new Size(double.PositiveInfinity,double.PositiveInfinity));return new Size();}
-        protected override Size ArrangeOverride(Size f){Children[0].Arrange(new Rect(f));Children[1].Arrange(new Rect(f));var a=Children[2].DesiredSize;Children[2].Arrange(new Rect(Math.Max(0,f.Width-a.Width-2),Outer?2:-9,a.Width,a.Height));Children[3].Arrange(new Rect(Outer?0:Math.Max(0,f.Width-a.Width-16),0,12,14));Children[4].Arrange(new Rect(Math.Max(0,f.Width-9),Math.Max(0,f.Height/2-13),18,26));Children[5].Arrange(new Rect(Math.Max(0,f.Width/2-13),Math.Max(0,f.Height-9),26,18));Children[6].Arrange(new Rect(Math.Max(0,f.Width-18),Math.Max(0,f.Height-18),18,18));return f;}
+        protected override Size ArrangeOverride(Size f){
+            Children[0].Arrange(new Rect(f));Children[1].Arrange(new Rect(f));var a=Children[2].DesiredSize;
+            Children[2].Arrange(new Rect(Math.Max(0,f.Width-a.Width-20),Outer?12:-9,a.Width,a.Height));Children[3].Arrange(new Rect(Outer?16:Math.Max(0,f.Width-a.Width-16),Outer?10:0,12,14));
+            const double edge=10,corner=16;double w=f.Width,h=f.Height;
+            Children[4].Arrange(new Rect(0,corner,Math.Min(edge,w),Math.Max(0,h-2*corner)));
+            Children[5].Arrange(new Rect(Math.Max(0,w-edge),corner,Math.Min(edge,w),Math.Max(0,h-2*corner)));
+            Children[6].Arrange(new Rect(corner,0,Math.Max(0,w-2*corner),Math.Min(edge,h)));
+            Children[7].Arrange(new Rect(corner,Math.Max(0,h-edge),Math.Max(0,w-2*corner),Math.Min(edge,h)));
+            Children[8].Arrange(new Rect(0,0,Math.Min(corner,w),Math.Min(corner,h)));
+            Children[9].Arrange(new Rect(Math.Max(0,w-corner),0,Math.Min(corner,w),Math.Min(corner,h)));
+            Children[10].Arrange(new Rect(0,Math.Max(0,h-corner),Math.Min(corner,w),Math.Min(corner,h)));
+            Children[11].Arrange(new Rect(Math.Max(0,w-corner),Math.Max(0,h-corner),Math.Min(corner,w),Math.Min(corner,h)));return f;
+        }
     }
 }

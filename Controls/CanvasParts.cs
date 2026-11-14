@@ -10,7 +10,7 @@ public static class CanvasParts
 {
     public static List<ViewLayoutGroup> Discover(string id, FrameworkElement element)
     {
-        if (element is EditTile or BackgroundColorSettings || element is System.Windows.Controls.Primitives.Popup || element is ItemsControl) return new();
+        if (element is EditTile or BackgroundColorSettings or BackgroundImageSettings or BackgroundPicture or OverlayAttachmentCard || element is System.Windows.Controls.Primitives.Popup || element is ItemsControl) return new();
         if (element is Border { Child: FrameworkElement child }) return Discover(id+".body",child);
         if (element is UserControl { Content: FrameworkElement content }) return Discover(id+".content",content);
         if (element is ContentControl { Content: FrameworkElement hosted } && element is not System.Windows.Controls.Primitives.ButtonBase) return Discover(id+".host",hosted);

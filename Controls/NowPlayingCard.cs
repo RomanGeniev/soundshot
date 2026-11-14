@@ -21,6 +21,7 @@ namespace GraphiteCompanion.Controls
         private readonly MainWindow main;
         private readonly Func<System.Threading.Tasks.Task<NowPlaying?>> readSnapshot;
         private readonly Func<NowPlaying,CancellationToken,System.Threading.Tasks.Task<PlayerVolume>> readPlayerVolume=NativePlayerVolume.ReadAsync;
+        private readonly Func<NowPlaying,CancellationToken,System.Threading.Tasks.Task<PlayerVolume>> preparePlayerVolume=NativePlayerVolume.PrepareAsync;
         private readonly Func<NowPlaying,double,CancellationToken,System.Threading.Tasks.Task<PlayerVolume>> writePlayerVolume=NativePlayerVolume.SetAsync;
         private readonly Canvas backdropLayer = new()
         {
@@ -248,7 +249,7 @@ namespace GraphiteCompanion.Controls
             volumeMessage.SetResourceReference(TextBlock.ForegroundProperty,"SubTextBrush");volumeContent.Children.Add(volumeMessage);
             var volumeBox=new Border{Width=260,Padding=new Thickness(13,10,13,10),CornerRadius=new CornerRadius(12),BorderThickness=new Thickness(1),Child=volumeContent};volumeBox.SetResourceReference(BackgroundProperty,"CardBrush");volumeBox.SetResourceReference(BorderBrushProperty,"CardBorderBrush");
             volumePopup.Child=volumeBox;volumePopup.PlacementTarget=volumeButton;
-            volumeButton.Click+=async(_,_)=>{volumePopup.IsOpen=!volumePopup.IsOpen;if(volumePopup.IsOpen){nextVolumeRead=DateTime.MinValue;await ReadVolume();}};
+            volumeButton.Click+=async(_,_)=>{volumePopup.IsOpen=!volumePopup.IsOpen;if(volumePopup.IsOpen){nextVolumeRead=DateTime.MinValue;await ReadVolume(true);}};
             volumePopup.Opened+=(_,_)=>System.Windows.Automation.AutomationProperties.SetItemStatus(volumeButton,"Ползунок открыт");
             volumePopup.Closed+=(_,_)=>System.Windows.Automation.AutomationProperties.SetItemStatus(volumeButton,"Ползунок скрыт");
             playerVolume.ValueChanged+=(_,_)=>{if(volumeSetting||!playerVolume.IsEnabled)return;volumeTarget=state;playerVolumeValue.Text=$"{playerVolume.Value:0}%";volumeDebounce.Stop();volumeDebounce.Start();};
@@ -452,12 +453,12 @@ namespace GraphiteCompanion.Controls
             backdropLayer.BeginAnimation(OpacityProperty, null);
             backdropLayer.CacheMode = null;
         }
-        private async System.Threading.Tasks.Task ReadVolume()
+        private async System.Threading.Tasks.Task ReadVolume(bool prepare=false)
         {
             if(!volumePopup.IsOpen||volumeReading||volumeWriting||volumeDebounce.IsEnabled||playerVolume.IsMouseCaptureWithin||DateTime.UtcNow<nextVolumeRead||disposed)return;
             var target=state;if(target==null){ShowVolume(new(null,"Нет активного плеера"));return;}volumeReading=true;nextVolumeRead=DateTime.UtcNow.AddSeconds(5);
-            try{var value=await readPlayerVolume(target,volumeLifetime.Token);if(!disposed&&state?.Key==target.Key&&!volumeWriting&&!volumeDebounce.IsEnabled&&!playerVolume.IsMouseCaptureWithin)ShowVolume(value);}finally{volumeReading=false;}
+            try{var value=await (prepare?preparePlayerVolume:readPlayerVolume)(target,volumeLifetime.Token);if(!disposed&&state?.Key==target.Key&&!volumeWriting&&!volumeDebounce.IsEnabled&&!playerVolume.IsMouseCaptureWithin)ShowVolume(value);}finally{volumeReading=false;}
         }
-        private void ShowVolume(PlayerVolume value){volumeSetting=true;playerVolume.IsEnabled=value.Percent.HasValue;if(value.Percent.HasValue)playerVolume.Value=value.Percent.Value;playerVolumeValue.Text=value.Percent.HasValue?$"{value.Percent:0}%":"—";playerVolume.ToolTip=value.Message;playerVolumeValue.ToolTip=value.Message;volumeMessage.Text=value.Message;volumeMessage.Visibility=value.Percent.HasValue?Visibility.Collapsed:Visibility.Visible;((TextBlock)volumeButton.Content).Text=value.Percent==0?"\uE74F":"\uE767";volumeSetting=false;}
+        private void ShowVolume(PlayerVolume value){volumeSetting=true;playerVolume.IsEnabled=value.Percent.HasValue;if(value.Percent.HasValue)playerVolume.Value=value.Percent.Value;playerVolumeValue.Text=value.Percent.HasValue?$"{value.Percent:0}%":"—";playerVolume.ToolTip=value.Message;playerVolumeValue.ToolTip=value.Message;volumeMessage.Text=value.Message;volumeMessage.Visibility=value.Percent.HasValue&&value.Diagnostic!="write-not-confirmed"?Visibility.Collapsed:Visibility.Visible;((TextBlock)volumeButton.Content).Text=value.Percent==0?"\uE74F":"\uE767";volumeSetting=false;}
     }
 }

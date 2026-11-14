@@ -21,6 +21,7 @@ public sealed class CanvasCard
     public FrameworkElement? Options { get; set; }
     public string InsideLabel { get; set; } = "Содержимое";
     public bool Resizable { get; set; } = true;
+    public bool Optional { get; set; }
     public IEnumerable<ViewLayoutGroup> AllGroups => Inside.SelectMany(g=>g.AllGroups);
     public CanvasCard(string id, string name, FrameworkElement element, int zone = 1, bool visible = true) { Id = id; Name = name; Element = element; Zone = zone; Visible = visible; }
 }
@@ -81,6 +82,7 @@ public sealed partial class SnapBoard : UserControl
     public bool Editing { get; private set; }
     public string? ActiveBlock => active;
     public FrameworkElement? Appearance { get; set; }
+    public List<(string Label,Action Add)> AddActions { get; } = new();
     public event Action<bool>? Finished;
     public event Action? ModeChanged;
     public CanvasLayout Value => state.Copy();
@@ -92,7 +94,7 @@ public sealed partial class SnapBoard : UserControl
         toolbarSurface.SizeChanged+=(_,_)=>{root.MinHeight=Editing&&!UsesInspector?Math.Max(64,toolbarSurface.ActualHeight+16):64;};
         canvas.LeftWeight=leftWeight;canvas.RightWeight=rightWeight;body.Children.Add(canvas);
         columns.ColumnDefinitions.Add(new() { Width = new GridLength(leftWeight, GridUnitType.Star) }); columns.ColumnDefinitions.Add(new() { Width = new GridLength(14) }); columns.ColumnDefinitions.Add(new() { Width = new GridLength(rightWeight, GridUnitType.Star) });
-        columns.Children.Add(left); Grid.SetColumn(right, 2); columns.Children.Add(right);
+        columns.Children.Add(left); Grid.SetColumn(right, 2); columns.Children.Add(right); 
         // Reserve the scrollbar gutter in normal and edit mode alike. Otherwise the
         // first growing card can create a scrollbar and unexpectedly shrink itself.
         scroll = new ScrollViewer { Template = BoardScrollTemplate, Content = body, Background = Brushes.Transparent, AllowDrop = true, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled };
@@ -134,7 +136,7 @@ public sealed partial class SnapBoard : UserControl
     {
         var tile = new EditTile(card.Element,this,card.Id,card.Name,()=>Hide(card.Id),card.Inside.Count>0||card.Options!=null?()=>Enter(card.Id):null,card.Resizable?()=>{}:null){Margin=new Thickness(0,0,0,10),AllowDrop=true,InlineActions=true,InsideLabel=card.InsideLabel,IsContainer=card.Inside.Count>0,HasOptions=card.Options!=null};
         tile.Selected+=SelectElement;
-        tile.ToolTip = card.Name + " · за ⠿ — переместить, за угол — масштабировать";
+        tile.ToolTip = card.Name + " · ⠿ — переместить · края и углы — изменить размер";
         tile.DragStarted+=()=>{BeginOperation();BeginDrag();};
         tile.ResizeStarted+=BeginBlockResize;tile.ResizeFinished+=accepted=>{CompletePlacement(accepted);if(accepted)EndOperation();else CancelOperation();};
         tile.MoveByKeyboard+=delta=>MoveBlockByKeyboard(card.Id,delta);
@@ -162,7 +164,7 @@ public sealed partial class SnapBoard : UserControl
     public void Apply(CanvasLayout? value)
     {
         state = (value ?? new()).Copy(); state.Blocks = state.Blocks.Where(x => x != null).DistinctBy(x => x.Id).ToList();
-        foreach (var card in cards) if (!state.Blocks.Any(x => x.Id == card.Id)) state.Blocks.Add(new() { Id = card.Id, Zone = card.Zone, Visible = card.Visible });
+        foreach (var card in cards.Where(c=>!c.Optional)) if (!state.Blocks.Any(x => x.Id == card.Id)) state.Blocks.Add(new() { Id = card.Id, Zone = card.Zone, Visible = card.Visible });
         foreach (var block in state.Blocks) block.Zone = Math.Clamp(block.Zone, 0, 2);
         var groups=AllGroups.Distinct().ToArray();
         foreach(var group in groups)group.ConfigureTransfers(groups,state.ElementHosts);
@@ -320,3 +322,4 @@ public sealed partial class SnapBoard : UserControl
     public static TextBlock Text(string value) { var text = new TextBlock { Text = value, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center }; text.SetResourceReference(TextBlock.ForegroundProperty, "TextBrush"); return text; }
     public static Button Button(string text, Action action, string? tip = null) { var b = new Button { Content = text, ToolTip = tip, Padding = new Thickness(9, 6, 9, 6), Margin = new Thickness(2), MinHeight = 28 }; b.SetResourceReference(StyleProperty, "GhostButton"); b.Click += (_, e) => { e.Handled = true; action(); }; return b; }
 }
+

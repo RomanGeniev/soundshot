@@ -148,7 +148,9 @@
       </Setter>
     </Style>
   </Window.Resources>
-  <Grid Margin="12" Background="{DynamicResource BgBrush}">
+  <Grid>
+  <controls:BackgroundPicture x:Name="AppBackgroundPicture" />
+  <Grid Margin="12" Background="Transparent">
     <Grid.ColumnDefinitions>
       <ColumnDefinition Width="Auto" />
       <ColumnDefinition Width="24" />
@@ -891,6 +893,7 @@
                   <TextBlock x:Name="CustomAccentHint" FontSize="12" Foreground="{DynamicResource SubTextBrush}" TextWrapping="Wrap" />
                 </StackPanel>
                 <ContentControl x:Name="BackgroundColorHost" />
+                <ContentControl x:Name="BackgroundImageHost" />
               </StackPanel>
             </StackPanel>
           </Border>
@@ -924,6 +927,7 @@
         </Grid>
       </ScrollViewer>
     </Grid>
+  </Grid>
   </Grid>
 </Window>
 
